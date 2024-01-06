@@ -397,6 +397,29 @@ def load_rl_datasets(
         sample["rejected"] = f"{sample['rejected'][1]['content']}<|im_end|>"
         return sample
 
+    def sharegpt_metharme_dpo(input_sample):  # pylint: disable=possibly-unused-variable
+        sample = {}
+        sample_hold = ""
+        if input_sample["conversations"][-1]["from"] != "human":
+            print(
+                f"\nLast item in conversation is not 'human'.\n"
+                f"'{input_sample['conversations'][-1]['from']}' found instead."
+            )
+            exit()  # if its not human, the instruct tags don't make sense
+        for s_message in input_sample["conversations"]:
+            if s_message["from"] == "system":
+                sample_hold += f"<|system|>{s_message['value']}"
+            if s_message["from"] == "human":
+                sample_hold += f"<|user|>{s_message['value']}<|model|>"
+            if s_message["from"] == "gpt":
+                sample_hold += f"{s_message['value']}</s>"
+
+        sample["prompt"] = f"{sample_hold}"
+        sample["chosen"] = f"{input_sample['chosen_response']}</s>"
+        sample["rejected"] = f"{input_sample['rejected_response']}</s>"
+
+        return sample
+
     for i, data_set in enumerate(train_datasets):
         _type = cfg.datasets[i]["type"]
         ds_type_fn = locals()[_type]
