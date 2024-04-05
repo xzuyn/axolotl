@@ -142,6 +142,7 @@ class ChatTemplate(str, Enum):
     inst = "inst"  # pylint: disable=invalid-name
     gemma = "gemma"  # pylint: disable=invalid-name
     cohere = "cohere"  # pylint: disable=invalid-name
+    metharme = "metharme"  # pylint: disable=invalid-name
 
 
 class LoftQConfig(BaseModel):
