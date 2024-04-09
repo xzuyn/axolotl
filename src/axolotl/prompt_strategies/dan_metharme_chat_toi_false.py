@@ -86,7 +86,7 @@ class PygmalionPromptTokenizingStrategy(PromptTokenizingStrategy):
                     needs_bos = False
                     chat_needs_model_tag = True
                 else:
-                    prefix = " <|user|>"
+                    prefix = "<|user|>"
                     res = self._tokenize(
                         prefix + sharegpt_value.strip(),
                         add_eos_token=False,
