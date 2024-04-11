@@ -1,4 +1,4 @@
-"""chatml prompt tokenization strategy for ORPO"""
+"""Metharme prompt tokenization strategy for ORPO"""
 from typing import Any, Dict, Generator, List, Optional, Tuple
 
 from pydantic import BaseModel
