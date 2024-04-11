@@ -160,7 +160,7 @@ class ORPOTokenizingStrategy(PromptTokenizingStrategy):
             "labels": chosen_labels,
             "attention_mask": [1] * len(chosen_labels),
             "prompt_attention_mask": (
-                [1] * len(rejected_input_ids) + [0] * (len(chosen_labels) - len(rejected_input_ids))
+                ([1] * len(rejected_input_ids)) + ([0] * (len(chosen_labels) - len(rejected_input_ids)))
             ),
         }
 
