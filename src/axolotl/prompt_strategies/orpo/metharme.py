@@ -8,6 +8,7 @@ from axolotl.prompters import Prompter
 from axolotl.utils.chat_templates import chat_templates
 
 
+# TODO: Can probably be removed after removing other stuff.
 class Message(BaseModel):
     """message/turn"""
 
@@ -16,13 +17,14 @@ class Message(BaseModel):
     label: Optional[bool] = None
 
 
+# TODO: Can probably be removed after removing other stuff.
 class MessageList(BaseModel):
     """conversation"""
 
     messages: List[Message]
 
 
-# TODO: Remove/reduce this. We just need ORPOTokenizingStrategy
+# TODO: Remove/reduce this. We just need ORPOTokenizingStrategy.
 def load(
     tokenizer,
     cfg,
