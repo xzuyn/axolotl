@@ -76,13 +76,13 @@ class ORPOTokenizingStrategy(PromptTokenizingStrategy):
                 labels += [IGNORE_INDEX] * len(_input_ids)
 
         # Deal with the chosen response, and combine with main conversation
-        chosen = f"\n{prompt['gpt-name']}{prompt['chosen_gpt']}</s>"
+        chosen = f"\n{prompt['gpt-name']}: {prompt['chosen_gpt']}</s>"
         _input_ids = self.tokenizer.encode(chosen, add_special_tokens=False)
         chosen_input_ids = input_ids + _input_ids
         chosen_labels = labels + _input_ids
 
         # Deal with the rejected response, and combine with main conversation
-        rejected = f"\n{prompt['gpt-name']}{prompt['rejected_gpt']}</s>"
+        rejected = f"\n{prompt['gpt-name']}: {prompt['rejected_gpt']}</s>"
         _input_ids = self.tokenizer.encode(rejected, add_special_tokens=False)
         rejected_input_ids = input_ids + _input_ids
         rejected_labels = labels + _input_ids
