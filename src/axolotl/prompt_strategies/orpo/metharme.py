@@ -61,8 +61,8 @@ class ORPODatasetParsingStrategy:
         for i, prompt_message in enumerate(prompt["chosen"]):
             if prompt_message["role"] == "system":
                 messages.append(Message(role="system", content=prompt_message["content"], label=False))
-            elif prompt_message["role"] == "user":
-                messages.append(Message(role="user", content=prompt_message["content"], label=False))
+            elif prompt_message["role"] == "human":
+                messages.append(Message(role="human", content=prompt_message["content"], label=False))
             elif prompt_message["role"] == "gpt":
                 messages.append(Message(role="gpt", content=prompt_message["content"], label=True))
         return MessageList(messages=messages)
@@ -75,8 +75,8 @@ class ORPODatasetParsingStrategy:
         for i, prompt_message in enumerate(prompt["rejected"]):
             if prompt_message["role"] == "system":
                 messages.append(Message(role="system", content=prompt_message["content"], label=False))
-            elif prompt_message["role"] == "user":
-                messages.append(Message(role="user", content=prompt_message["content"], label=False))
+            elif prompt_message["role"] == "human":
+                messages.append(Message(role="human", content=prompt_message["content"], label=False))
             elif prompt_message["role"] == "gpt":
                 messages.append(Message(role="gpt", content=prompt_message["content"], label=True))
         return MessageList(messages=messages)
@@ -130,10 +130,10 @@ class ORPOTokenizingStrategy(PromptTokenizingStrategy):
                     needs_bos = False
                 elif message["from"] == "system" and not needs_bos:
                     part = f"<|system|>{message['value']}"
-                elif message["from"] == "user" and needs_bos:
+                elif message["from"] == "human" and needs_bos:
                     part = f"<s><|user|>{message['value']}"
                     needs_bos = False
-                elif message["from"] == "user" and not needs_bos:
+                elif message["from"] == "human" and not needs_bos:
                     part = f"<|user|>{message['value']}"
 
                 _input_ids = self.tokenizer.encode(part, add_special_tokens=False)
@@ -151,7 +151,6 @@ class ORPOTokenizingStrategy(PromptTokenizingStrategy):
         _input_ids = self.tokenizer.encode(rejected, add_special_tokens=False)
         rejected_input_ids = input_ids + _input_ids
         rejected_labels = labels + (([IGNORE_INDEX] * len(model_tag_ids)) + _input_ids[len(model_tag_ids):])
-
 
         return {
             "rejected_input_ids": rejected_input_ids,
@@ -188,7 +187,7 @@ class ORPOPrompter(Prompter):
                     chat_template=self.chat_template,
                     tokenize=False,
                 ), False
-            if message.role == "user":
+            if message.role == "human":
                 yield self.tokenizer.apply_chat_template(
                     conversation,
                     add_generation_prompt=True,
