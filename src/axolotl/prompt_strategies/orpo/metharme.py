@@ -14,7 +14,7 @@ def load(
     ds_cfg: Optional[Dict[str, Any]] = None, **kwargs
 ):  # pylint: disable=possibly-unused-variable,unused-argument
     return ORPOTokenizingStrategy(
-        ORPOPrompter("placeholder", "placeholder"),
+        "placeholder",
         tokenizer,
         cfg.train_on_inputs,
         cfg.sequence_len
@@ -35,11 +35,9 @@ class ORPOTokenizingStrategy(PromptTokenizingStrategy):
     def __init__(
         self,
         *args,
-        dataset_parser=None,
         **kwargs,
     ):
         super().__init__(*args, **kwargs)
-        self.dataset_parser = dataset_parser
 
     def tokenize_prompt(self, prompt):
         model_tag_ids = self._tokenize("<|model|>", add_eos_token=False, strip_bos_token=True)["input_ids"]
@@ -107,12 +105,3 @@ class ORPOTokenizingStrategy(PromptTokenizingStrategy):
                 ([1] * len(rejected_input_ids)) + ([0] * (len(chosen_labels) - len(rejected_input_ids)))
             ),
         }
-
-
-# TODO: Try to completely remove this. Leftover to prevent errors.
-class ORPOPrompter(Prompter):
-    """Single Turn prompter for ORPO"""
-
-    def __init__(self, chat_template, tokenizer):
-        self.chat_template = chat_template
-        self.tokenizer = tokenizer
