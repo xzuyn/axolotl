@@ -32,7 +32,7 @@ def load(
     """
 
     # TODO: Remove this. It's not needed anymore.
-    chat_template = chat_templates("metharme")
+    chat_template = chat_templates("chatml")
     if ds_cfg and "chat_template" in ds_cfg:
         chat_template = ds_cfg["chat_template"]
         try:
