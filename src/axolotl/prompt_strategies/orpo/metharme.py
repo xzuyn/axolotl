@@ -5,23 +5,6 @@ from pydantic import BaseModel
 
 from axolotl.prompt_tokenizers import IGNORE_INDEX, PromptTokenizingStrategy
 from axolotl.prompters import Prompter
-from axolotl.utils.chat_templates import chat_templates
-
-
-# TODO: Can probably be removed after removing other stuff.
-class Message(BaseModel):
-    """message/turn"""
-
-    role: str
-    content: str
-    label: Optional[bool] = None
-
-
-# TODO: Can probably be removed after removing other stuff.
-class MessageList(BaseModel):
-    """conversation"""
-
-    messages: List[Message]
 
 
 # TODO: Remove/reduce this. We just need ORPOTokenizingStrategy.
@@ -30,59 +13,12 @@ def load(
     cfg,
     ds_cfg: Optional[Dict[str, Any]] = None, **kwargs
 ):  # pylint: disable=possibly-unused-variable,unused-argument
-    """
-    chatml transforms for datasets with system, input, chosen, rejected
-    """
-
-    chat_template = chat_templates("chatml")
-    if ds_cfg and "chat_template" in ds_cfg:
-        chat_template = ds_cfg["chat_template"]
-        try:
-            chat_template = chat_templates(chat_template)
-        except ValueError:
-            pass
-    tokenizer.chat_template = chat_template
-
     return ORPOTokenizingStrategy(
-        ORPOPrompter(chat_template, tokenizer),
+        ORPOPrompter("placeholder", "placeholder"),
         tokenizer,
         cfg.train_on_inputs,
-        cfg.sequence_len,
-        dataset_parser=ORPODatasetParsingStrategy(),
+        cfg.sequence_len
     )
-
-
-# TODO: Remove this. It's not needed anymore.
-class ORPODatasetParsingStrategy:
-    """Strategy to parse chosen rejected dataset into messagelist"""
-
-    # noinspection PyMethodMayBeStatic
-    def get_chosen_conversation_thread(self, prompt) -> MessageList:
-        """Dataset structure mappings"""
-
-        messages: List[Message] = []
-        for i, prompt_message in enumerate(prompt["chosen"]):
-            if prompt_message["role"] == "system":
-                messages.append(Message(role="system", content=prompt_message["content"], label=False))
-            elif prompt_message["role"] == "human":
-                messages.append(Message(role="human", content=prompt_message["content"], label=False))
-            elif prompt_message["role"] == "gpt":
-                messages.append(Message(role="gpt", content=prompt_message["content"], label=True))
-        return MessageList(messages=messages)
-
-    # noinspection PyMethodMayBeStatic
-    def get_rejected_conversation_thread(self, prompt) -> MessageList:
-        """Dataset structure mappings"""
-
-        messages: List[Message] = []
-        for i, prompt_message in enumerate(prompt["rejected"]):
-            if prompt_message["role"] == "system":
-                messages.append(Message(role="system", content=prompt_message["content"], label=False))
-            elif prompt_message["role"] == "human":
-                messages.append(Message(role="human", content=prompt_message["content"], label=False))
-            elif prompt_message["role"] == "gpt":
-                messages.append(Message(role="gpt", content=prompt_message["content"], label=True))
-        return MessageList(messages=messages)
 
 
 # This is doing all the work pretty much.
@@ -124,6 +60,7 @@ class ORPOTokenizingStrategy(PromptTokenizingStrategy):
 
                 _input_ids = self.tokenizer.encode(part, add_special_tokens=False)
                 input_ids += _input_ids
+
                 if needs_bos:
                     labels += ([IGNORE_INDEX] * len(model_tag_ids_w_bos)) + _input_ids[len(model_tag_ids_w_bos):]
                     needs_bos = False
@@ -140,6 +77,8 @@ class ORPOTokenizingStrategy(PromptTokenizingStrategy):
                     needs_bos = False
                 elif message["from"] == "human" and not needs_bos:
                     part = f"<|user|>{message['value']}"
+                else:
+                    continue
 
                 _input_ids = self.tokenizer.encode(part, add_special_tokens=False)
                 input_ids += _input_ids
@@ -170,39 +109,10 @@ class ORPOTokenizingStrategy(PromptTokenizingStrategy):
         }
 
 
-# TODO: Remove this. It's not needed anymore.
+# TODO: Try to completely remove this. Leftover to prevent errors.
 class ORPOPrompter(Prompter):
     """Single Turn prompter for ORPO"""
 
     def __init__(self, chat_template, tokenizer):
         self.chat_template = chat_template
         self.tokenizer = tokenizer
-
-    def build_prompt(
-        self,
-        message_list: MessageList,
-    ) -> Generator[Tuple[str, bool], None, None]:
-        conversation = []
-        for message in message_list.messages:
-            conversation.append(message.model_dump())
-            if message.role == "system":
-                yield self.tokenizer.apply_chat_template(
-                    conversation,
-                    add_generation_prompt=False,
-                    chat_template=self.chat_template,
-                    tokenize=False,
-                ), False
-            if message.role == "human":
-                yield self.tokenizer.apply_chat_template(
-                    conversation,
-                    add_generation_prompt=True,
-                    chat_template=self.chat_template,
-                    tokenize=False,
-                ), False
-            if message.role == "gpt":
-                yield self.tokenizer.apply_chat_template(
-                    conversation,
-                    add_generation_prompt=False,
-                    chat_template=self.chat_template,
-                    tokenize=False,
-                ), True
