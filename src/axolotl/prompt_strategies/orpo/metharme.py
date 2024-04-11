@@ -22,6 +22,7 @@ class MessageList(BaseModel):
     messages: List[Message]
 
 
+# TODO: Remove/reduce this. We just need ORPOTokenizingStrategy
 def load(
     tokenizer,
     cfg,
@@ -31,7 +32,6 @@ def load(
     chatml transforms for datasets with system, input, chosen, rejected
     """
 
-    # TODO: Remove this. It's not needed anymore.
     chat_template = chat_templates("chatml")
     if ds_cfg and "chat_template" in ds_cfg:
         chat_template = ds_cfg["chat_template"]
@@ -50,6 +50,7 @@ def load(
     )
 
 
+# TODO: Remove this. It's not needed anymore.
 class ORPODatasetParsingStrategy:
     """Strategy to parse chosen rejected dataset into messagelist"""
 
@@ -82,6 +83,7 @@ class ORPODatasetParsingStrategy:
         return MessageList(messages=messages)
 
 
+# This is doing all the work pretty much.
 class ORPOTokenizingStrategy(PromptTokenizingStrategy):
     """
     rejected_input_ids
@@ -104,6 +106,7 @@ class ORPOTokenizingStrategy(PromptTokenizingStrategy):
     def tokenize_prompt(self, prompt):
         model_tag_ids = self._tokenize("<|model|>", add_eos_token=False, strip_bos_token=True)["input_ids"]
         model_tag_ids_w_bos = self._tokenize("<s><|model|>", add_eos_token=False, strip_bos_token=True)["input_ids"]
+
         input_ids = []
         labels = []
 
