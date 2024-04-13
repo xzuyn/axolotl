@@ -37,7 +37,7 @@ class PygmalionPromptTokenizingStrategy(PromptTokenizingStrategy):
         res = self._tokenize("<|model|>", add_eos_token=False, strip_bos_token=True)
         self.bot_prefix_token_ids = res["input_ids"]
 
-        res = self._tokenize(" <|model|>", add_eos_token=False, strip_bos_token=False)
+        res = self._tokenize("<|model|>", add_eos_token=False, strip_bos_token=False)
         self.bot_prefix_token_ids_w_bos = res["input_ids"]
 
     def tokenize_prompt(self, prompt):
@@ -55,7 +55,7 @@ class PygmalionPromptTokenizingStrategy(PromptTokenizingStrategy):
 
             if sharegpt_from == "system":
                 if needs_bos is True:
-                    prefix = " <|system|>"
+                    prefix = "<|system|>"
                     res = self._tokenize(
                         prefix + sharegpt_value.strip(),
                         add_eos_token=False,
@@ -76,7 +76,7 @@ class PygmalionPromptTokenizingStrategy(PromptTokenizingStrategy):
                     chat_needs_model_tag = True
             elif sharegpt_from == "human":
                 if needs_bos is True:
-                    prefix = " <|user|>"
+                    prefix = "<|user|>"
                     res = self._tokenize(
                         prefix + sharegpt_value.strip(),
                         add_eos_token=False,
@@ -97,7 +97,7 @@ class PygmalionPromptTokenizingStrategy(PromptTokenizingStrategy):
                     chat_needs_model_tag = True
             elif sharegpt_from == "gpt":
                 if needs_bos is True:
-                    prefix = " <|model|>"
+                    prefix = "<|model|>"
                     res = self._tokenize(
                         prefix + sharegpt_value.strip(),
                         add_eos_token=True,
@@ -125,7 +125,7 @@ class PygmalionPromptTokenizingStrategy(PromptTokenizingStrategy):
             elif sharegpt_from == "human-chat":
                 if chat_needs_model_tag is True:
                     if needs_bos is True:
-                        prefix = f" <|model|>\n{sharegpt_name}: "
+                        prefix = f"<|model|>\n{sharegpt_name}: "
                         res = self._tokenize(
                             prefix + sharegpt_value.strip(),
                             add_eos_token=False,
@@ -146,7 +146,7 @@ class PygmalionPromptTokenizingStrategy(PromptTokenizingStrategy):
                         chat_needs_model_tag = False
                 else:
                     if needs_bos is True:
-                        prefix = f" \n{sharegpt_name}: "
+                        prefix = f"\n{sharegpt_name}: "
                         res = self._tokenize(
                             prefix + sharegpt_value.strip(),
                             add_eos_token=False,
@@ -168,7 +168,7 @@ class PygmalionPromptTokenizingStrategy(PromptTokenizingStrategy):
             elif sharegpt_from == "gpt-chat":
                 if chat_needs_model_tag is True:
                     if needs_bos is True:
-                        prefix = f" <|model|>\n{sharegpt_name}: "
+                        prefix = f"<|model|>\n{sharegpt_name}: "
                         res = self._tokenize(
                             prefix + sharegpt_value.strip(),
                             add_eos_token=True,
@@ -177,8 +177,7 @@ class PygmalionPromptTokenizingStrategy(PromptTokenizingStrategy):
                         labels = [IGNORE_TOKEN_ID] * len(
                             self.bot_prefix_token_ids_w_bos
                         ) + [*copy.deepcopy(res["input_ids"])][
-                            len(self.bot_prefix_token_ids_w_bos) :
-                        ]
+                            len(self.bot_prefix_token_ids_w_bos):]
                         needs_bos = False
                         chat_needs_model_tag = False
                     else:
@@ -190,12 +189,12 @@ class PygmalionPromptTokenizingStrategy(PromptTokenizingStrategy):
                         )
                         labels = [IGNORE_TOKEN_ID] * len(self.bot_prefix_token_ids) + [
                             *copy.deepcopy(res["input_ids"])
-                        ][len(self.bot_prefix_token_ids) :]
+                        ][len(self.bot_prefix_token_ids):]
                         needs_bos = False
                         chat_needs_model_tag = False
                 else:
                     if needs_bos is True:
-                        prefix = f" \n{sharegpt_name}: "
+                        prefix = f"\n{sharegpt_name}: "
                         res = self._tokenize(
                             prefix + sharegpt_value.strip(),
                             add_eos_token=True,
