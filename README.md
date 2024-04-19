@@ -30,6 +30,7 @@ Features:
   - [Conda/Pip venv](#condapip-venv)
   - [Cloud GPU](#cloud-gpu) - Latitude.sh, JarvisLabs, RunPod
   - [Bare Metal Cloud GPU](#bare-metal-cloud-gpu)
+  - [ROCm (Experimental)](#rocm-experimental)
   - [Windows](#windows)
   - [Mac](#mac)
   - [Google Colab](#google-colab)
