@@ -46,6 +46,7 @@ class PygmalionPromptTokenizingStrategy(PromptTokenizingStrategy):
 
         needs_bos = True
         chat_needs_model_tag = True
+
         # Iterate over each conversation part in the prompt
         num_parts = len(prompt["conversations"])
         for i, part in enumerate(self.prompter.build_prompt(prompt["conversations"])):
@@ -53,6 +54,8 @@ class PygmalionPromptTokenizingStrategy(PromptTokenizingStrategy):
                 end_of_text = True
             else:
                 end_of_text = False
+
+            # If the length is 3, that means it's the CustomShareGPT format
             if len(part) == 3:
                 sharegpt_from, sharegpt_name, sharegpt_value = part
             else:
