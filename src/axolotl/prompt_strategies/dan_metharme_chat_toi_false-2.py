@@ -125,8 +125,7 @@ class PygmalionPromptTokenizingStrategy(PromptTokenizingStrategy):
                     else:
                         labels = [IGNORE_TOKEN_ID] * len(
                             self.bot_prefix_token_ids_w_bos
-                        ) + [*copy.deepcopy(res["input_ids"])][
-                            len(self.bot_prefix_token_ids_w_bos):]
+                        ) + [*copy.deepcopy(res["input_ids"])][len(self.bot_prefix_token_ids_w_bos):]
                     needs_bos = False
                     chat_needs_model_tag = True
                 else:
@@ -139,9 +138,9 @@ class PygmalionPromptTokenizingStrategy(PromptTokenizingStrategy):
                     if self.train_on_inputs:
                         labels = res["input_ids"]
                     else:
-                        labels = [IGNORE_TOKEN_ID] * len(self.bot_prefix_token_ids) + [
-                            *copy.deepcopy(res["input_ids"])
-                        ][len(self.bot_prefix_token_ids):]
+                        labels = [IGNORE_TOKEN_ID] * len(
+                            self.bot_prefix_token_ids
+                        ) + [*copy.deepcopy(res["input_ids"])][len(self.bot_prefix_token_ids):]
                     needs_bos = False
                     chat_needs_model_tag = True
             elif sharegpt_from == "human-chat":
@@ -213,8 +212,7 @@ class PygmalionPromptTokenizingStrategy(PromptTokenizingStrategy):
                         else:
                             labels = [IGNORE_TOKEN_ID] * len(
                                 self.bot_prefix_token_ids_w_bos
-                            ) + [*copy.deepcopy(res["input_ids"])][
-                                len(self.bot_prefix_token_ids_w_bos):]
+                            ) + [*copy.deepcopy(res["input_ids"])][len(self.bot_prefix_token_ids_w_bos):]
                         needs_bos = False
                         chat_needs_model_tag = False
                     else:
@@ -227,9 +225,9 @@ class PygmalionPromptTokenizingStrategy(PromptTokenizingStrategy):
                         if self.train_on_inputs:
                             labels = res["input_ids"]
                         else:
-                            labels = [IGNORE_TOKEN_ID] * len(self.bot_prefix_token_ids) + [
-                                *copy.deepcopy(res["input_ids"])
-                            ][len(self.bot_prefix_token_ids):]
+                            labels = [IGNORE_TOKEN_ID] * len(
+                                self.bot_prefix_token_ids
+                            ) + [*copy.deepcopy(res["input_ids"])][len(self.bot_prefix_token_ids):]
                         needs_bos = False
                         chat_needs_model_tag = False
                 else:
