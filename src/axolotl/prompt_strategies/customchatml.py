@@ -47,24 +47,28 @@ class CustomChatMLPromptTokenizingStrategy(PromptTokenizingStrategy):
                 sharegpt_from, sharegpt_name, sharegpt_value = part
 
                 if sharegpt_from == "system":
-                    role_name = "role: system"
+                    role_name = "system"
                 elif sharegpt_from == "human":
-                    role_name = "role: user"
+                    role_name = "user"
                 elif sharegpt_from == "gpt":
-                    role_name = "role: assistant"
+                    role_name = "assistant"
                 elif sharegpt_from == "human-chat":
-                    role_name = f"role: character | name: {sharegpt_name}"
+                    role_name = f"{sharegpt_name}"
                 elif sharegpt_from == "gpt-chat":
-                    role_name = f"role: character | name: {sharegpt_name}"
+                    role_name = f"{sharegpt_name}"
+                elif sharegpt_from == "human-tool":
+                    role_name = f"tool request: {sharegpt_name}"
+                elif sharegpt_from == "gpt-tool":
+                    role_name = f"tool response: {sharegpt_name}"
             elif len(part) == 2:
                 sharegpt_from, sharegpt_value = part
 
                 if sharegpt_from == "system":
-                    role_name = "role: system"
+                    role_name = "system"
                 elif sharegpt_from == "human":
-                    role_name = "role: user"
+                    role_name = "user"
                 elif sharegpt_from == "gpt":
-                    role_name = "role: assistant"
+                    role_name = "assistant"
             else:
                 LOG.warning(f"unknown 'len(part)' in conversation: {len(part)}")
                 exit()
