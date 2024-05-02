@@ -1,4 +1,4 @@
-"""Module containing the PygmalionPromptTokenizingStrategy and PygmalionPrompter class"""
+"""Module containing the CustomChatMLPromptTokenizingStrategy and CustomChatMLPrompter class"""
 
 # Import necessary modules and functions
 import copy
@@ -20,9 +20,9 @@ LOG = logging.getLogger("axolotl")
 IGNORE_TOKEN_ID = -100
 
 
-class PygmalionPromptTokenizingStrategy(PromptTokenizingStrategy):
+class CustomChatMLPromptTokenizingStrategy(PromptTokenizingStrategy):
     """
-    Tokenizing strategy for Pygmalion.
+    Tokenizing strategy for CustomChatML.
     """
 
     def __init__(self, prompter, tokenizer, *args, **kwargs):
@@ -50,12 +50,12 @@ class PygmalionPromptTokenizingStrategy(PromptTokenizingStrategy):
                     role_name = "role: system"
                 elif sharegpt_from == "human":
                     role_name = "role: user"
-                elif sharegpt_from == "human-chat":
-                    role_name = f"role: user | name: {sharegpt_name}"
                 elif sharegpt_from == "gpt":
                     role_name = "role: assistant"
+                elif sharegpt_from == "human-chat":
+                    role_name = f"role: character | name: {sharegpt_name}"
                 elif sharegpt_from == "gpt-chat":
-                    role_name = f"role: assistant | name: {sharegpt_name}"
+                    role_name = f"role: character | name: {sharegpt_name}"
             elif len(part) == 2:
                 sharegpt_from, sharegpt_value = part
 
@@ -71,11 +71,7 @@ class PygmalionPromptTokenizingStrategy(PromptTokenizingStrategy):
 
             # Get tokens which will be masked out if using train_on_inputs: false
             prefix = self._tokenize(
-                (
-                    "<|im_start|>"
-                    + role_name
-                    + "\n"
-                ),
+                f"<|im_start|>{role_name}\n",
                 add_eos_token=False,
                 strip_bos_token=strip_bos,
             )
@@ -132,9 +128,9 @@ class PygmalionPromptTokenizingStrategy(PromptTokenizingStrategy):
         return result
 
 
-class PygmalionPrompter:
+class CustomChatMLPrompter:
     """
-    Prompter for Pygmalion.
+    Prompter for CustomChatML.
     """
 
     def __init__(self, *args, **kwargs):
@@ -153,9 +149,9 @@ class PygmalionPrompter:
 
 
 def load(tokenizer, cfg):
-    # Function to load the PygmalionPromptTokenizingStrategy
-    return PygmalionPromptTokenizingStrategy(
-        PygmalionPrompter(),
+    # Function to load the CustomChatMLPromptTokenizingStrategy
+    return CustomChatMLPromptTokenizingStrategy(
+        CustomChatMLPrompter(),
         tokenizer,
         cfg.train_on_inputs,
         cfg.sequence_len
