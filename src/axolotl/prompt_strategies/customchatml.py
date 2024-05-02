@@ -75,16 +75,6 @@ class CustomChatMLPromptTokenizingStrategy(PromptTokenizingStrategy):
                 add_eos_token=False,
                 strip_bos_token=strip_bos,
             )
-            message = self._tokenize(
-                sharegpt_value.strip(),
-                add_eos_token=False,
-                strip_bos_token=True,
-            )
-            suffix = self._tokenize(
-                "<|im_end|>",
-                add_eos_token=end_of_text,
-                strip_bos_token=True,
-            )
 
             res = self._tokenize(
                 f"<|im_start|>{role_name}\n{sharegpt_value.strip()}<|im_end|>",
@@ -96,23 +86,17 @@ class CustomChatMLPromptTokenizingStrategy(PromptTokenizingStrategy):
                 self.train_on_inputs is False
                 and (sharegpt_from == "system" or sharegpt_from == "human" or sharegpt_from == "human-chat")
             ):
+                labels = [IGNORE_TOKEN_ID] * len(res["input_ids"])
+            elif (
+                self.train_on_inputs is False
+                and (sharegpt_from == "gpt" or sharegpt_from == "gpt-chat")
+            ):
                 labels = (
-                    [*copy.deepcopy(prefix["input_ids"])]  # Keep the prefix
-                    + [IGNORE_TOKEN_ID] * len([*copy.deepcopy(message["input_ids"])])  # Mask out the user message
-                    + [*copy.deepcopy(suffix["input_ids"])]  # Keep the suffix
+                    [IGNORE_TOKEN_ID] * len(prefix["input_ids"])  # Mask the prefix
+                    + [*copy.deepcopy(res["input_ids"])][len(prefix["input_ids"]):]
                 )
             else:
-                labels = [*copy.deepcopy(res["input_ids"])]
-
-            # Make sure the BOS token is unmasked
-            if strip_bos is False:
-                del labels[0]
-                labels.insert(0, self.tokenizer.bos_token_id)
-
-            # Make sure the EOS token is unmasked
-            if end_of_text:
-                del labels[-1]
-                labels.append(self.tokenizer.eos_token_id)
+                labels = res["input_ids"]
 
             strip_bos = True
 
