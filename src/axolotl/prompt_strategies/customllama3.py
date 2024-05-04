@@ -88,12 +88,21 @@ class CustomLLaMa3PromptTokenizingStrategy(PromptTokenizingStrategy):
 
             if (
                 self.train_on_inputs is False
-                and (sharegpt_from == "system" or sharegpt_from == "human" or sharegpt_from == "human-chat")
+                and (
+                    sharegpt_from == "system"
+                    or sharegpt_from == "human"
+                    or sharegpt_from == "human-chat"
+                    or sharegpt_from == "human-tool"
+                )
             ):
                 labels = [IGNORE_TOKEN_ID] * len(res["input_ids"])
             elif (
                 self.train_on_inputs is False
-                and (sharegpt_from == "gpt" or sharegpt_from == "gpt-chat")
+                and (
+                    sharegpt_from == "gpt"
+                    or sharegpt_from == "gpt-chat"
+                    or sharegpt_from == "gpt-tool"
+                )
             ):
                 labels = (
                     [IGNORE_TOKEN_ID] * len(prefix["input_ids"])  # Mask the prefix
