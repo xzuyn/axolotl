@@ -34,9 +34,6 @@ class CustomChatMLPromptTokenizingStrategy(PromptTokenizingStrategy):
         # Tokenize the prompt based on its conversations
         result, current_len = tokenize_prompt_default()
 
-        # We don't want to remove the BOS token for the first turn
-        strip_bos = False
-
         # Sometimes it gets named 'conversations' and other times 'conversation'
         if "conversations" in prompt:
             conversation_name = "conversations"
@@ -49,17 +46,19 @@ class CustomChatMLPromptTokenizingStrategy(PromptTokenizingStrategy):
         # Iterate over each conversation turn in the prompt
         num_turns = len(prompt[conversation_name])
         for i, turn in enumerate(prompt[conversation_name]):
+            # Strip BOS token and add a new line to the beginning if it's not the first turn
+            if i == 0:
+                strip_bos = False
+                add_new_line = ""
+            else:
+                strip_bos = True
+                add_new_line = "\n"
+
             # Check if this is the last turn, so we know to add the EOS token
             if i == num_turns - 1:
                 end_of_text = True
             else:
                 end_of_text = False
-
-            # Add a new line to the beginning if it's not the first turn
-            if i == 0:
-                add_new_line = ""
-            else:
-                add_new_line = "\n"
 
             sharegpt_from, sharegpt_value = turn["from"].strip(), turn["value"].strip()
             if sharegpt_from == "system":
@@ -118,9 +117,6 @@ class CustomChatMLPromptTokenizingStrategy(PromptTokenizingStrategy):
             # Handle unmasked turn
             else:
                 labels = res["input_ids"]
-
-            # Now that we've done the first turn we can remove the BOS token
-            strip_bos = True
 
             # Parse tokenized result and update current length
             result, current_len = parse_tokenized_to_result(

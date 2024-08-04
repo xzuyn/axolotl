@@ -33,9 +33,6 @@ class CustomLLaMa3PromptTokenizingStrategy(PromptTokenizingStrategy):
         # Tokenize the prompt based on its conversations
         result, current_len = tokenize_prompt_default()
 
-        # We don't want to remove the BOS token for the first turn
-        strip_bos = False
-
         # Sometimes it gets named 'conversations' and other times 'conversation'
         if "conversations" in prompt:
             conversation_name = "conversations"
@@ -48,6 +45,12 @@ class CustomLLaMa3PromptTokenizingStrategy(PromptTokenizingStrategy):
         # Iterate over each conversation turn in the prompt
         num_turns = len(prompt[conversation_name])
         for i, turn in enumerate(prompt[conversation_name]):
+            # Strip BOS token if it's not the first turn
+            if i == 0:
+                strip_bos = False
+            else:
+                strip_bos = True
+
             # Check if this is the last turn, so we know to add the EOS token
             if i == num_turns - 1:
                 end_of_text = True
@@ -111,9 +114,6 @@ class CustomLLaMa3PromptTokenizingStrategy(PromptTokenizingStrategy):
             # Handle unmasked turn
             else:
                 labels = res["input_ids"]
-
-            # Now that we've done the first turn we can remove the BOS token
-            strip_bos = True
 
             # Parse tokenized result and update current length
             result, current_len = parse_tokenized_to_result(
