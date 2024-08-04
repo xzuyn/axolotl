@@ -75,7 +75,7 @@ class CustomMistralMLPromptTokenizingStrategy(PromptTokenizingStrategy):
                 role_name = "model"
                 sharegpt_value = f"{turn['name'].strip()}: {sharegpt_value}"
             else:
-                LOG.warning(f"'from' contains an unhandled string")
+                LOG.warning(f"'from' contains an unhandled string: {sharegpt_from}")
                 exit()
 
             # Get tokens which will be masked out if using train_on_inputs: false
