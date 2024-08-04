@@ -1,4 +1,4 @@
-"""Module containing the CustomChatMLPromptTokenizingStrategy class"""
+"""Module containing the CustomPhi3PromptTokenizingStrategy class"""
 
 # Import necessary modules and functions
 import copy
@@ -21,9 +21,9 @@ LOG = logging.getLogger("axolotl")
 IGNORE_TOKEN_ID = -100
 
 
-class CustomChatMLPromptTokenizingStrategy(PromptTokenizingStrategy):
+class CustomPhi3PromptTokenizingStrategy(PromptTokenizingStrategy):
     """
-    Tokenizing strategy for CustomChatML.
+    Tokenizing strategy for CustomPhi3.
     """
 
     def __init__(self, prompter, tokenizer, *args, **kwargs):
@@ -63,16 +63,16 @@ class CustomChatMLPromptTokenizingStrategy(PromptTokenizingStrategy):
 
             sharegpt_from, sharegpt_value = turn["from"].strip(), turn["value"].strip()
             if sharegpt_from == "system":
-                role_name = "system"
+                role_name = "<|system|>"
             elif sharegpt_from == "human":
-                role_name = "user"
+                role_name = "<|user|>"
             elif sharegpt_from == "human-chat":
-                role_name = "user"
+                role_name = "<|user|>"
                 sharegpt_value = f"{turn['name'].strip()}: {sharegpt_value}"
             elif sharegpt_from == "gpt":
-                role_name = "assistant"
+                role_name = "<|assistant|>"
             elif sharegpt_from == "gpt-chat":
-                role_name = "assistant"
+                role_name = "<|assistant|>"
                 sharegpt_value = f"{turn['name'].strip()}: {sharegpt_value}"
             else:
                 LOG.warning(f"'from' contains an unhandled string")
@@ -80,15 +80,15 @@ class CustomChatMLPromptTokenizingStrategy(PromptTokenizingStrategy):
 
             # Get tokens which will be masked out if using train_on_inputs: false
             prefix = self._tokenize(
-                f"{add_new_line}<|im_start|>{role_name}\n",
+                f"{add_new_line}{role_name}\n",
                 add_eos_token=False,
                 strip_bos_token=strip_bos,
             )
 
             # Get entire tokenized turn
             res = self._tokenize(
-                f"{add_new_line}<|im_start|>{role_name}\n"
-                f"{sharegpt_value.strip()}<|im_end|>",
+                f"{add_new_line}{role_name}\n"
+                f"{sharegpt_value.strip()}<|end|>",
                 add_eos_token=end_of_text,
                 strip_bos_token=strip_bos,
             )
@@ -135,9 +135,9 @@ class CustomChatMLPromptTokenizingStrategy(PromptTokenizingStrategy):
 
 
 # TODO: Remove this as it doesn't get used
-class CustomChatMLPrompter:
+class CustomPhi3Prompter:
     """
-    Prompter for CustomChatML.
+    Prompter for CustomPhi3.
     """
 
     def __init__(self, *args, **kwargs):
@@ -145,10 +145,10 @@ class CustomChatMLPrompter:
         pass
 
 
-# Function to load the CustomChatMLPromptTokenizingStrategy
+# Function to load the CustomPhi3PromptTokenizingStrategy
 def load(tokenizer, cfg):
-    return CustomChatMLPromptTokenizingStrategy(
-        CustomChatMLPrompter(),  # TODO: Remove this as it doesn't get used
+    return CustomPhi3PromptTokenizingStrategy(
+        CustomPhi3Prompter(),  # TODO: Remove this as it doesn't get used
         tokenizer,
         cfg.train_on_inputs,
         cfg.sequence_len
