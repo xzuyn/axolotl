@@ -45,9 +45,8 @@ class CustomGemma2PromptTokenizingStrategy(PromptTokenizingStrategy):
             LOG.warning(f"sample does not contain 'conversations' or 'conversation'")
             exit()
 
-        num_turns = len(prompt[conversation_name])
-
         # Iterate over each conversation turn in the prompt
+        num_turns = len(prompt[conversation_name])
         for i, turn in enumerate(prompt[conversation_name]):
             # Strip BOS token and add a new line to the beginning if it's not the first turn
             if i == 0:
