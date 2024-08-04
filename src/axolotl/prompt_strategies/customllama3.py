@@ -94,7 +94,6 @@ class CustomLLaMa3PromptTokenizingStrategy(PromptTokenizingStrategy):
                     sharegpt_from == "system"
                     or sharegpt_from == "human"
                     or sharegpt_from == "human-chat"
-                    or sharegpt_from == "human-tool"
                 )
             ):
                 labels = [IGNORE_TOKEN_ID] * len(res["input_ids"])
@@ -104,8 +103,6 @@ class CustomLLaMa3PromptTokenizingStrategy(PromptTokenizingStrategy):
                 and (
                     sharegpt_from == "gpt"
                     or sharegpt_from == "gpt-chat"
-                    or sharegpt_from == "gpt-tool"
-                    or sharegpt_from == "completion"
                 )
             ):
                 labels = (
