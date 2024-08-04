@@ -63,6 +63,7 @@ class CustomGemma2PromptTokenizingStrategy(PromptTokenizingStrategy):
             else:
                 end_of_text = False
 
+            # Get correct roles and messages
             sharegpt_from, sharegpt_value = turn["from"].strip(), turn["value"].strip()
             if sharegpt_from == "system":
                 role_name = "system"
