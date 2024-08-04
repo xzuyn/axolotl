@@ -56,54 +56,40 @@ class CustomChatMLPromptTokenizingStrategy(PromptTokenizingStrategy):
             else:
                 end_of_text = False
 
-            # Check if the conversation is CustomShareGPT
-            if "from" in turn and "name" in turn and "value" in turn:
-                sharegpt_from, sharegpt_name, sharegpt_value = turn["from"], turn["name"], turn["value"]
-
-                if sharegpt_from == "system":
-                    role_name = "system"
-                elif sharegpt_from == "human":
-                    role_name = "user"
-                elif sharegpt_from == "gpt":
-                    role_name = "assistant"
-                elif sharegpt_from == "human-chat":
-                    role_name = f"{sharegpt_name}"
-                elif sharegpt_from == "gpt-chat":
-                    role_name = f"{sharegpt_name}"
-                elif sharegpt_from == "human-tool":
-                    role_name = f"tool request: {sharegpt_name}"
-                elif sharegpt_from == "gpt-tool":
-                    role_name = f"tool response: {sharegpt_name}"
-                else:
-                    LOG.warning(f"'from' contains an unhandled string")
-                    exit()
-            # Check if the conversation is ShareGPT
-            elif "from" in turn and "value" in turn:
-                sharegpt_from, sharegpt_value = turn["from"], turn["value"]
-
-                if sharegpt_from == "system":
-                    role_name = "system"
-                elif sharegpt_from == "human":
-                    role_name = "user"
-                elif sharegpt_from == "gpt":
-                    role_name = "assistant"
-                else:
-                    LOG.warning(f"'from' contains an unhandled string")
-                    exit()
+            # Add a new line to the beginning if it's not the first turn
+            if i == 0:
+                add_new_line = ""
             else:
-                LOG.warning(f"conversation does not contain 'from' or 'value'")
+                add_new_line = "\n"
+
+            sharegpt_from, sharegpt_value = turn["from"], turn["value"]
+            if sharegpt_from == "system":
+                role_name = "system"
+            elif sharegpt_from == "human":
+                role_name = "user"
+            elif sharegpt_from == "human-chat":
+                role_name = "user"
+                sharegpt_value = f"{turn['name']}: {sharegpt_value}"
+            elif sharegpt_from == "gpt":
+                role_name = "model"
+            elif sharegpt_from == "gpt-chat":
+                role_name = "model"
+                sharegpt_value = f"{turn['name']}: {sharegpt_value}"
+            else:
+                LOG.warning(f"'from' contains an unhandled string")
                 exit()
 
             # Get tokens which will be masked out if using train_on_inputs: false
             prefix = self._tokenize(
-                f"<|im_start|>{role_name}\n",
+                f"{add_new_line}<|im_start|>{role_name}\n",
                 add_eos_token=False,
                 strip_bos_token=strip_bos,
             )
 
             # Get entire tokenized turn
             res = self._tokenize(
-                f"<|im_start|>{role_name}\n{sharegpt_value.strip()}<|im_end|>",
+                f"{add_new_line}<|im_start|>{role_name}\n"
+                f"{sharegpt_value.strip()}<|im_end|>",
                 add_eos_token=end_of_text,
                 strip_bos_token=strip_bos,
             )
@@ -115,7 +101,6 @@ class CustomChatMLPromptTokenizingStrategy(PromptTokenizingStrategy):
                     sharegpt_from == "system"
                     or sharegpt_from == "human"
                     or sharegpt_from == "human-chat"
-                    or sharegpt_from == "human-tool"
                 )
             ):
                 labels = [IGNORE_TOKEN_ID] * len(res["input_ids"])
@@ -125,7 +110,6 @@ class CustomChatMLPromptTokenizingStrategy(PromptTokenizingStrategy):
                 and (
                     sharegpt_from == "gpt"
                     or sharegpt_from == "gpt-chat"
-                    or sharegpt_from == "gpt-tool"
                 )
             ):
                 labels = (
