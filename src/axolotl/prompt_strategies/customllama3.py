@@ -55,19 +55,19 @@ class CustomLLaMa3PromptTokenizingStrategy(PromptTokenizingStrategy):
             else:
                 end_of_text = False
 
-            sharegpt_from, sharegpt_value = turn["from"], turn["value"]
+            sharegpt_from, sharegpt_value = turn["from"].strip(), turn["value"].strip()
             if sharegpt_from == "system":
                 role_name = "system"
             elif sharegpt_from == "human":
                 role_name = "user"
             elif sharegpt_from == "human-chat":
                 role_name = "user"
-                sharegpt_value = f"{turn['name']}: {sharegpt_value}"
+                sharegpt_value = f"{turn['name'].strip()}: {sharegpt_value}"
             elif sharegpt_from == "gpt":
                 role_name = "model"
             elif sharegpt_from == "gpt-chat":
                 role_name = "model"
-                sharegpt_value = f"{turn['name']}: {sharegpt_value}"
+                sharegpt_value = f"{turn['name'].strip()}: {sharegpt_value}"
             else:
                 LOG.warning(f"'from' contains an unhandled string")
                 exit()
