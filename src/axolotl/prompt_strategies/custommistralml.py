@@ -70,9 +70,9 @@ class CustomMistralMLPromptTokenizingStrategy(PromptTokenizingStrategy):
                 role_name = "user"
                 sharegpt_value = f"{turn['name'].strip()}: {sharegpt_value}"
             elif sharegpt_from == "gpt":
-                role_name = "model"
+                role_name = "assistant"
             elif sharegpt_from == "gpt-chat":
-                role_name = "model"
+                role_name = "assistant"
                 sharegpt_value = f"{turn['name'].strip()}: {sharegpt_value}"
             else:
                 LOG.warning(f"'from' contains an unhandled string: {sharegpt_from}")
