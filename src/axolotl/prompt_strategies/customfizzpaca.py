@@ -1,4 +1,4 @@
-"""Module containing the CustomPhi3PromptTokenizingStrategy class"""
+"""Module containing the CustomFizzpacaPromptTokenizingStrategy class"""
 
 # Import necessary modules and functions
 import copy
@@ -21,9 +21,9 @@ LOG = logging.getLogger("axolotl")
 IGNORE_TOKEN_ID = -100
 
 
-class CustomPhi3PromptTokenizingStrategy(PromptTokenizingStrategy):
+class CustomFizzpacaPromptTokenizingStrategy(PromptTokenizingStrategy):
     """
-    Tokenizing strategy for CustomPhi3.
+    Tokenizing strategy for CustomFizzpaca.
     """
 
     def __init__(self, prompter, tokenizer, *args, **kwargs):
@@ -141,9 +141,9 @@ class CustomPhi3PromptTokenizingStrategy(PromptTokenizingStrategy):
 
 
 # TODO: Remove this as it doesn't get used
-class CustomPhi3Prompter:
+class CustomFizzpacaPrompter:
     """
-    Prompter for CustomPhi3.
+    Prompter for CustomFizzpaca.
     """
 
     def __init__(self, *args, **kwargs):
@@ -151,10 +151,10 @@ class CustomPhi3Prompter:
         pass
 
 
-# Function to load the CustomPhi3PromptTokenizingStrategy
+# Function to load the CustomFizzpacaPromptTokenizingStrategy
 def load(tokenizer, cfg):
-    return CustomPhi3PromptTokenizingStrategy(
-        CustomPhi3Prompter(),  # TODO: Remove this as it doesn't get used
+    return CustomFizzpacaPromptTokenizingStrategy(
+        CustomFizzpacaPrompter(),  # TODO: Remove this as it doesn't get used
         tokenizer,
         cfg.train_on_inputs,
         cfg.sequence_len
