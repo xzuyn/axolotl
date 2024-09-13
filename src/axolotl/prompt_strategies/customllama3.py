@@ -71,6 +71,8 @@ class CustomLLaMa3PromptTokenizingStrategy(PromptTokenizingStrategy):
             elif sharegpt_from == "gpt-chat":
                 role_name = "assistant"
                 sharegpt_value = f"{turn['name'].strip()}: {sharegpt_value}"
+            elif sharegpt_from == "thought":
+                role_name = "thought"
             else:
                 LOG.warning(f"'from' contains an unhandled string: {sharegpt_from}")
                 exit()
@@ -106,6 +108,7 @@ class CustomLLaMa3PromptTokenizingStrategy(PromptTokenizingStrategy):
                 and (
                     sharegpt_from == "gpt"
                     or sharegpt_from == "gpt-chat"
+                    or sharegpt_from == "thought"
                 )
             ):
                 labels = (
