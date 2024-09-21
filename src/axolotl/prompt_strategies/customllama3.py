@@ -97,25 +97,19 @@ class CustomLLaMa3PromptTokenizingStrategy(PromptTokenizingStrategy):
             )
 
             # Handle masked user turn
-            if (
-                self.train_on_inputs is False
-                and (
-                    sharegpt_from == "system"
-                    or sharegpt_from == "human"
-                    or sharegpt_from == "masked-chat"
-                    or sharegpt_from == "masked-story"
-                )
+            if self.train_on_inputs is False and (
+                sharegpt_from == "system"
+                or sharegpt_from == "human"
+                or sharegpt_from == "masked-chat"
+                or sharegpt_from == "masked-story"
             ):
                 labels = [IGNORE_TOKEN_ID] * len(res["input_ids"])
             # Handle partially masked model turn
-            elif (
-                self.train_on_inputs is False
-                and (
-                    sharegpt_from == "gpt"
-                    or sharegpt_from == "chat"
-                    or sharegpt_from == "story"
-                    or sharegpt_from == "thought"
-                )
+            elif self.train_on_inputs is False and (
+                sharegpt_from == "gpt"
+                or sharegpt_from == "chat"
+                or sharegpt_from == "story"
+                or sharegpt_from == "thought"
             ):
                 labels = (
                     [IGNORE_TOKEN_ID] * len(prefix["input_ids"])  # Mask the prefix
