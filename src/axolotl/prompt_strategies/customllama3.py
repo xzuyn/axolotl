@@ -59,18 +59,22 @@ class CustomLLaMa3PromptTokenizingStrategy(PromptTokenizingStrategy):
 
             # Get correct roles and messages
             sharegpt_from, sharegpt_value = turn["from"].strip(), turn["value"].strip()
+            # ShareGPT Roles
             if sharegpt_from == "system":
                 role_name = "system"
             elif sharegpt_from == "human":
                 role_name = "user"
             elif sharegpt_from == "gpt":
                 role_name = "assistant"
+            # CustomShareGPT Roles
             elif sharegpt_from == "chat":
                 role_name = f"{turn['name'].strip()}"
             elif sharegpt_from == "masked-chat":
                 role_name = f"{turn['name'].strip()}"
+            elif sharegpt_from == "story":
+                role_name = f"{turn['name'].strip()}"
             elif sharegpt_from == "masked-story":
-                role_name = f"{turn['chapter-name'].strip()}"
+                role_name = f"{turn['name'].strip()}"
             elif sharegpt_from == "thought":
                 role_name = "thought"
             else:
