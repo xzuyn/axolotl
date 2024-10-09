@@ -67,20 +67,14 @@ class CustomLLaMa3PromptTokenizingStrategy(PromptTokenizingStrategy):
             elif sharegpt_from == "gpt":
                 role_name = "assistant"
             # CustomShareGPT Roles
-            elif sharegpt_from == "chat":
-                role_name = f"{turn['name'].strip()}"
-            elif sharegpt_from == "masked-chat":
-                role_name = f"{turn['name'].strip()}"
-            elif sharegpt_from == "story":
-                role_name = f"{turn['name'].strip()}"
-            elif sharegpt_from == "masked-story":
-                role_name = f"{turn['name'].strip()}"
+            elif sharegpt_from == "human-chat":
+                role_name = "user"
+                sharegpt_value = f"{turn['name'].strip()}: {sharegpt_value}"
+            elif sharegpt_from == "gpt-chat":
+                role_name = "assistant"
+                sharegpt_value = f"{turn['name'].strip()}: {sharegpt_value}"
             elif sharegpt_from == "thought":
                 role_name = "thought"
-            elif sharegpt_from == "human-chat":
-                role_name = f"{turn['name'].strip()}"
-            elif sharegpt_from == "gpt-chat":
-                role_name = f"{turn['name'].strip()}"
             else:
                 LOG.warning(f"'from' contains an unhandled string: {sharegpt_from}")
                 exit()
@@ -104,18 +98,14 @@ class CustomLLaMa3PromptTokenizingStrategy(PromptTokenizingStrategy):
             if self.train_on_inputs is False and (
                 sharegpt_from == "system"
                 or sharegpt_from == "human"
-                or sharegpt_from == "masked-chat"
-                or sharegpt_from == "masked-story"
                 or sharegpt_from == "human-chat"
             ):
                 labels = [IGNORE_TOKEN_ID] * len(res["input_ids"])
             # Handle partially masked model turn
             elif self.train_on_inputs is False and (
                 sharegpt_from == "gpt"
-                or sharegpt_from == "chat-role"
-                or sharegpt_from == "story"
-                or sharegpt_from == "thought"
                 or sharegpt_from == "gpt-chat"
+                or sharegpt_from == "thought"
             ):
                 labels = (
                     [IGNORE_TOKEN_ID] * len(prefix["input_ids"])  # Mask the prefix
