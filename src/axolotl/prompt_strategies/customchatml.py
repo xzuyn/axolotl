@@ -61,6 +61,7 @@ class CustomChatMLPromptTokenizingStrategy(PromptTokenizingStrategy):
 
             # Get correct roles and messages
             sharegpt_from, sharegpt_value = turn["from"].strip(), turn["value"].strip()
+            # ShareGPT Roles
             if sharegpt_from == "system":
                 role_name = "system"
             elif sharegpt_from == "human":
@@ -68,14 +69,12 @@ class CustomChatMLPromptTokenizingStrategy(PromptTokenizingStrategy):
             elif sharegpt_from == "gpt":
                 role_name = "assistant"
             # CustomShareGPT Roles
-            elif sharegpt_from == "chat":
-                role_name = f"{turn['name'].strip()}"
-            elif sharegpt_from == "masked-chat":
-                role_name = f"{turn['name'].strip()}"
-            elif sharegpt_from == "story":
-                role_name = f"{turn['name'].strip()}"
-            elif sharegpt_from == "masked-story":
-                role_name = f"{turn['name'].strip()}"
+            elif sharegpt_from == "human-chat":
+                role_name = "user"
+                sharegpt_value = f"{turn['name'].strip()}: {sharegpt_value}"
+            elif sharegpt_from == "gpt-chat":
+                role_name = "assistant"
+                sharegpt_value = f"{turn['name'].strip()}: {sharegpt_value}"
             elif sharegpt_from == "thought":
                 role_name = "thought"
             else:
@@ -101,15 +100,13 @@ class CustomChatMLPromptTokenizingStrategy(PromptTokenizingStrategy):
             if self.train_on_inputs is False and (
                 sharegpt_from == "system"
                 or sharegpt_from == "human"
-                or sharegpt_from == "masked-chat"
-                or sharegpt_from == "masked-story"
+                or sharegpt_from == "human-chat"
             ):
                 labels = [IGNORE_TOKEN_ID] * len(res["input_ids"])
             # Handle partially masked model turn
             elif self.train_on_inputs is False and (
                 sharegpt_from == "gpt"
-                or sharegpt_from == "chat"
-                or sharegpt_from == "story"
+                or sharegpt_from == "gpt-chat"
                 or sharegpt_from == "thought"
             ):
                 labels = (
