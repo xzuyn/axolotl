@@ -62,15 +62,17 @@ class CustomFizzpacaPromptTokenizingStrategy(PromptTokenizingStrategy):
 
             # Get correct roles and messages
             sharegpt_from, sharegpt_value = turn["from"].strip(), turn["value"].strip()
+            # ShareGPT Roles
             if sharegpt_from == "system":
                 role_name = "### System:"
             elif sharegpt_from == "human":
                 role_name = "### Instruction:"
+            elif sharegpt_from == "gpt":
+                role_name = "### Response:"
+            # CustomShareGPT Roles
             elif sharegpt_from == "human-chat":
                 role_name = "### Instruction:"
                 sharegpt_value = f"{turn['name'].strip()}: {sharegpt_value}"
-            elif sharegpt_from == "gpt":
-                role_name = "### Response:"
             elif sharegpt_from == "gpt-chat":
                 role_name = "### Response:"
                 sharegpt_value = f"{turn['name'].strip()}: {sharegpt_value}"
@@ -79,28 +81,41 @@ class CustomFizzpacaPromptTokenizingStrategy(PromptTokenizingStrategy):
                 exit()
 
             # Get tokens which will be masked out if using train_on_inputs: false
-            prefix = self._tokenize(
+            prefix = self.tokenizer(
                 f"{add_new_line}{role_name}\n",
-                add_eos_token=False,
-                strip_bos_token=strip_bos,
+                truncation=False,
+                padding=False,
+                return_tensors=None,
             )
+            if prefix["input_ids"][0] == self.tokenizer.bos_token_id and strip_bos:
+                prefix["input_ids"] = prefix["input_ids"][1:]
+                prefix["attention_mask"] = prefix["attention_mask"][1:]
 
             if sharegpt_from == "gpt" or sharegpt_from == "gpt-chat":
                 # Get entire tokenized turn
-                res = self._tokenize(
-                    f"{add_new_line}{role_name}\n"
-                    f"{sharegpt_value.strip()}</s>",
-                    add_eos_token=end_of_text,
-                    strip_bos_token=strip_bos,
-                )
-            else:
-                # Get entire tokenized turn
-                res = self._tokenize(
+                res = self.tokenizer(
                     f"{add_new_line}{role_name}\n"
                     f"{sharegpt_value.strip()}",
-                    add_eos_token=end_of_text,
-                    strip_bos_token=strip_bos,
+                    truncation=False,
+                    padding=False,
+                    return_tensors=None,
                 )
+                end_of_text = True
+            else:
+                # Get entire tokenized turn
+                res = self.tokenizer(
+                    f"{add_new_line}{role_name}\n"
+                    f"{sharegpt_value.strip()}",
+                    truncation=False,
+                    padding=False,
+                    return_tensors=None,
+                )
+            if res["input_ids"][-1] != self.tokenizer.eos_token_id and end_of_text:
+                res["input_ids"].append(self.tokenizer.eos_token_id)
+                res["attention_mask"].append(1)
+            if res["input_ids"][0] == self.tokenizer.bos_token_id and strip_bos:
+                res["input_ids"] = res["input_ids"][1:]
+                res["attention_mask"] = res["attention_mask"][1:]
 
             # Handle masked user turn
             if (
