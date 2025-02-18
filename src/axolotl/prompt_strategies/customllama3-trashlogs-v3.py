@@ -65,6 +65,8 @@ class CustomLLaMa3TrashLogsV3PromptTokenizingStrategy(PromptTokenizingStrategy):
                     attachments_string += f"{attachment['fileName']}, "
                 attachments_string = f"[Attachments: {attachments_string[:-2]}]\n\n{turn['value']}".strip()
                 turn_value = attachments_string
+            elif turn["stickers"]:
+                turn_value = f"[Sticker: {turn['stickers'][0]['name']}]\n\n{turn['value']}".strip()
             else:
                 turn_value = turn["value"].strip()
 
@@ -99,11 +101,13 @@ class CustomLLaMa3TrashLogsV3PromptTokenizingStrategy(PromptTokenizingStrategy):
                 res["attention_mask"] = res["attention_mask"][1:]
 
             # If the turn has an attachment, has an url, is from a bot, or isn't a "default message", mask entire turn
+            # Teaching it to output any of this stuff is probably bad, but would probably also be bad contextually to remove all together
             if (
-                turn["attachments"]  # Not useful to teach it turns with the attachment stuff combined
-                or re.search(URL_FINDING_REGEX_PATTERN, turn_value)  # Not useful to teach it turns with urls in them
-                or turn["isBot"]  # May learn repetitive behaviors, and overall not useful to learn probably
-                or turn["type"] != "Default"  # May learn weird behavior if it learns on replies to a message it has no way to identify as being the recipient
+                turn["attachments"]
+                or turn["stickers"]
+                or re.search(URL_FINDING_REGEX_PATTERN, turn_value)
+                or turn["isBot"]
+                or turn["type"] != "Default"
             ):
                 labels = [IGNORE_TOKEN_ID] * len(res["input_ids"])
             else:
