@@ -98,14 +98,14 @@ class CustomLLaMa3TrashLogsV3PromptTokenizingStrategy(PromptTokenizingStrategy):
                 res["input_ids"] = res["input_ids"][1:]
                 res["attention_mask"] = res["attention_mask"][1:]
 
-            # If the turn has an attachment, url, or is from a bot, mask it all. We don't want to teach it that
+            # If the turn has an attachment, has an url, is from a bot, or isn't a "default message", mask entire turn
             if (
-                turn["attachments"]
-                or turn["isBot"]
-                or re.search(URL_FINDING_REGEX_PATTERN, turn_value)
+                turn["attachments"]  # Not useful to teach it turns with the attachment stuff combined
+                or re.search(URL_FINDING_REGEX_PATTERN, turn_value)  # Not useful to teach it turns with urls in them
+                or turn["isBot"]  # May learn repetitive behaviors, and overall not useful to learn probably
+                or turn["type"] != "Default"  # May learn weird behavior if it learns on replies to a message it has no way to identify as being the recipient
             ):
                 labels = [IGNORE_TOKEN_ID] * len(res["input_ids"])
-            # If the turn has an url, mask it all. We don't want to teach it to output that
             else:
                 labels = (
                     [IGNORE_TOKEN_ID] * len(prefix["input_ids"])  # Mask the prefix
