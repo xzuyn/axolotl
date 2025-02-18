@@ -65,8 +65,7 @@ class CustomLLaMa3TrashLogsV3PromptTokenizingStrategy(PromptTokenizingStrategy):
                 attachments_string = ""
                 for attachment in turn["attachments"]:
                     attachments_string += f"{attachment['fileName']}, "
-                attachments_string = f"[Attachments: {attachments_string[:-2]}]\n\n{turn['value']}".strip()
-                turn_value = attachments_string
+                turn_value = f"[Attachments: {attachments_string[:-2]}]\n\n{turn['value']}".strip()
             elif turn["stickers"]:
                 turn_value = f"[Sticker: {turn['stickers'][0]['name']}]\n\n{turn['value']}".strip()
             else:
