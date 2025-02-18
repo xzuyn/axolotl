@@ -98,16 +98,19 @@ class CustomLLaMa3TrashLogsV3PromptTokenizingStrategy(PromptTokenizingStrategy):
                 res["input_ids"] = res["input_ids"][1:]
                 res["attention_mask"] = res["attention_mask"][1:]
 
-            if not turn["attachments"]:
+            # If the turn has an attachment, url, or is from a bot, mask it all. We don't want to teach it that
+            if (
+                turn["attachments"]
+                or turn["isBot"]
+                or re.search(URL_FINDING_REGEX_PATTERN, turn_value)
+            ):
+                labels = [IGNORE_TOKEN_ID] * len(res["input_ids"])
+            # If the turn has an url, mask it all. We don't want to teach it to output that
+            else:
                 labels = (
                     [IGNORE_TOKEN_ID] * len(prefix["input_ids"])  # Mask the prefix
                     + [*copy.deepcopy(res["input_ids"])][len(prefix["input_ids"]):]
                 )
-            # If the turn has an url, mask it all. We don't want to teach it to output that
-            elif re.search(URL_FINDING_REGEX_PATTERN, turn_value):
-                labels = [IGNORE_TOKEN_ID] * len(res["input_ids"])
-            else:
-                labels = [IGNORE_TOKEN_ID] * len(res["input_ids"])
 
             # Parse tokenized result and update current length
             result, current_len = parse_tokenized_to_result(
