@@ -14,12 +14,14 @@ from axolotl.prompt_tokenizers import (
     tokenize_prompt_default,
 )
 
+
 # Set up logging
 LOG = logging.getLogger("axolotl")
 
 # Define a constant token ID to ignore
 IGNORE_TOKEN_ID = -100
 URL_FINDING_REGEX_PATTERN = r"^((https?|ftp|smtp):\/\/)?(www.)?[a-z0-9]+\.[a-z]+(\/[a-zA-Z0-9#]+\/?)*$"
+
 
 class CustomLLaMa3TrashLogsV3PromptTokenizingStrategy(PromptTokenizingStrategy):
     """
