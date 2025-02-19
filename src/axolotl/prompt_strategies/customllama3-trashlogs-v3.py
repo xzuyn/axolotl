@@ -20,7 +20,13 @@ LOG = logging.getLogger("axolotl")
 
 # Define a constant token ID to ignore
 IGNORE_TOKEN_ID = -100
-URL_FINDING_REGEX_PATTERN = r"^((https?|ftp|smtp):\/\/)?(www.)?[a-z0-9]+\.[a-z]+(\/[a-zA-Z0-9#]+\/?)*$"
+URL_FINDING_REGEX_PATTERN = (
+    r"\b(?:https?|ftp|smtp):\/\/"  # Word boundary + protocol
+    r"([a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}"  # Domain name
+    r"(:\d{1,5})?"  # Optional port
+    r"(\/[a-zA-Z0-9#\/?=&._-]*)?"  # Path, query parameters, or fragments
+    r"\b"  # Word boundary to prevent partial matches
+)
 
 
 class CustomLLaMa3TrashLogsV3PromptTokenizingStrategy(PromptTokenizingStrategy):
@@ -107,7 +113,7 @@ class CustomLLaMa3TrashLogsV3PromptTokenizingStrategy(PromptTokenizingStrategy):
                 turn["attachments"]
                 or turn["stickers"]
                 or re.search(URL_FINDING_REGEX_PATTERN, turn_value)
-                or turn["isBot"]
+                or turn["isbot"]
                 or turn["type"] != "Default"
             ):
                 labels = [IGNORE_TOKEN_ID] * len(res["input_ids"])
