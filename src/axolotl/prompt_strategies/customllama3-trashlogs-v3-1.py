@@ -69,12 +69,12 @@ class CustomLLaMa3TrashLogsV3PromptTokenizingStrategy(PromptTokenizingStrategy):
             # Add attachment info if it exists
             if turn["attachments"]:
                 turn_value = (
-                    f"[Attachments: {', '.join(attachment['name'] for attachment in turn['attachments'])}]\n\n"
+                    f"[Attachments: {', '.join(attachment for attachment in turn['attachments'])}]\n\n"
                     f"{turn['value']}"
                 ).strip()
             elif turn["stickers"]:
                 turn_value = (
-                    f"[Stickers: {', '.join(sticker['name'] for sticker in turn['stickers'])}]\n\n"
+                    f"[Stickers: {', '.join(sticker for sticker in turn['stickers'])}]\n\n"
                     f"{turn['value']}"
                 ).strip()
             else:
@@ -82,7 +82,7 @@ class CustomLLaMa3TrashLogsV3PromptTokenizingStrategy(PromptTokenizingStrategy):
 
             turn_from = f"messageid: {turn['messageid']} | timestamp: {turn['timestamp']} | username: {turn['name']} | nickname: {turn['nickname']} | type: {turn['type']}"
             if turn["mentions"]:
-                turn_from += f" | mentions: {', '.join(mention['name'] for mention in turn['mentions'])}"
+                turn_from += f" | mentions: {', '.join(mention for mention in turn['mentions'])}"
             if turn["type"] == "Reply":
                 turn_from += f" | reference: {turn['reference']}"
 
