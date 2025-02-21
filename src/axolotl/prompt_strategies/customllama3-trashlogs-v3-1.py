@@ -68,12 +68,15 @@ class CustomLLaMa3TrashLogsV3PromptTokenizingStrategy(PromptTokenizingStrategy):
 
             # Add attachment info if it exists
             if turn["attachments"]:
-                attachments_string = ""
-                for attachment in turn["attachments"]:
-                    attachments_string += f"{attachment['fileName']}, "
-                turn_value = f"[Attachments: {attachments_string[:-2]}]\n\n{turn['value']}".strip()
+                turn_value = (
+                    f"[Attachments: {', '.join(attachment['name'] for attachment in turn['attachments'])}]\n\n"
+                    f"{turn['value']}"
+                ).strip()
             elif turn["stickers"]:
-                turn_value = f"[Sticker: {turn['stickers'][0]['name']}]\n\n{turn['value']}".strip()
+                turn_value = (
+                    f"[Stickers: {', '.join(sticker['name'] for sticker in turn['stickers'])}]\n\n"
+                    f"{turn['value']}"
+                ).strip()
             else:
                 turn_value = turn["value"].strip()
 
