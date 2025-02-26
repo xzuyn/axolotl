@@ -136,11 +136,93 @@ REGEX_PATTERNS = [
     "for what (felt|seemed) like (hours|an eternity|forever)",
     ", but (he|she|they|I) can't help it",
     "conspiratorial whisper(|s)",
-    "whisper(|ing) conspiratorially"
+    "whisper(|ing) conspiratorially",
+    "eyes (sparkling|twinkling) with mischief",
+    "\\bministration\\b",
+    "couldn(')?t help but",
+    "racing with anticipation",
+    "leaves little to the imagination",
+    "shivers up",
+    "waggles her eyebrows",
+    "a testament to",
+    "a moth to a flame",
+    "canvas",
+    "eyes glint(ed)?",
+    "camaraderie",
+    "humble abode",
+    "cold and calculating",
+    "unbeknownst to them",
+    "iridescent",
+    "a dance as old as time",
+    "husky whispers",
+    "seductive purrs",
+    "towers over",
+    "rich tapestry",
+    "delve",
+    "lean in",
+    "leans in",
+    "leans in close",
+    "don't stop, don't ever stop",
+    "make me yours, claim me",
+    "mind, body, and soul",
+    "another day in your life",
+    "a symphony of",
+    "body and soul",
+    "pleasure and pain",
+    "like a predator stalking its prey",
+    "orchestra",
+    "depths",
+    "dance",
+    "chuckles darkly",
+    "could not help but",
+    "felt a mix of \\w+ and \\w+",
+    "a mischievous glint",
+    "husky voice",
+    "a smirk playing on (her|his|their) lips",
+    "playfully smirking",
+    "rivulets of",
+    "waves of arousal pooling in (her|his|their) belly",
+    "torn between propriety and desire",
+    "tongue darts out",
+    "nails rake angry red lines",
+    "(her|his) cheeks flame",
+    "inner walls clenching",
+    "eyes alight with mirth",
+    "naughty boy",
+    "tracing a finger along your jawline",
+    "oh my\\.\\.\\.",
+    "the atmosphere",
+    "pushing aside a strand of hair",
+    "adam's apple bobbing",
+    "\\bpalpable\\b",
+    "bosomy breasts",
+    "looking like the cat that got the cream",
+    "softly but firmly",
+    "siren(')?s call",
+    "dimly lit",
+    "the air is thick",
+    "\\\"you really know how to treat a lady!\\\"",
+    "\\bpebbled\\b",
+    "eyes searching",
+    "what do you say",
+    "to meet (her|his) gaze",
+    "(her|his|their) wet heat",
+    "whimpers, biting (her|his|their) lip",
+    "hum with delight",
+    "embark on this",
+    ", if you will,",
+    "evident in (his|her|their) eyes",
+    "overwhelmed by the sheer",
+    "was taken aback",
+    "(her|his) cheeks redden",
+    "little mouse",
+    "\\bminx\\b",
+    "you(')?re a bold one"
 ]
+COMPILED_REGEX_PATTERNS = [re.compile(pattern) for pattern in REGEX_PATTERNS]
 
 
-def mask_regex_attention(self, input_data, regex_patterns):
+def mask_regex_attention(self, input_data, compiled_regex_patterns):
     # Decode the input_ids back to text.
     input_text = self.tokenizer.decode(input_data["input_ids"])
 
@@ -151,9 +233,9 @@ def mask_regex_attention(self, input_data, regex_patterns):
     # Make a copy of the original attention_mask.
     new_attention_mask = input_data["attention_mask"].copy()
 
-    # For each sensitive regex pattern, find all its occurrences in the text.
-    for pattern in regex_patterns:
-        for match in re.finditer(pattern, input_text):
+    # For each regex pattern, find all its occurrences in the text.
+    for pattern in compiled_regex_patterns:
+        for match in pattern.finditer(input_text):
             found_index = match.start()
             end_index = match.end()
             # Check each token's character span; if it overlaps, mask it out.
@@ -262,7 +344,7 @@ class CustomLLaMa3PromptTokenizingStrategy(PromptTokenizingStrategy):
                 or sharegpt_from == "gpt-chat"
                 or sharegpt_from == "thought"
             ):
-                res["attention_mask"] = mask_regex_attention(self, res, REGEX_PATTERNS)
+                res["attention_mask"] = mask_regex_attention(self, res, COMPILED_REGEX_PATTERNS)
                 modified_label = [
                     label if mask == 1
                     else IGNORE_TOKEN_ID
