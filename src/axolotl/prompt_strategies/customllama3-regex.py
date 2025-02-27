@@ -135,7 +135,7 @@ REGEX_PATTERNS = [
     "a testament to",
     "a moth to a flame",
     "canvas",
-    "eyes glint(|ed)",
+    "eyes glint(|ed|ing)",
     "camaraderie",
     "humble abode",
     "cold and calculating",
@@ -205,6 +205,7 @@ REGEX_PATTERNS = [
     "end of (session|story|rp|roleplay|chat|chapter)",
     "thanks for (posting|reading|sharing)",
     "thank you for (posting|reading|sharing)",
+    "[!:\\.;?]  ",
     # Thinking test
     "<(think|thinking|thought|thoughts)>",
     # https://github.com/meta-llama/PurpleLlama/commit/4b807228b6803ea5b8eb065179f8e90747512018
