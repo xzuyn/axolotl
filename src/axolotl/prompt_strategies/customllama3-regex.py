@@ -78,7 +78,7 @@ REGEX_PATTERNS = [
     "(?i)whispering words of passion",
     "(?i)soft and gentle",
     "(?i)dance of pleasure",
-    "(?i)(your|his|her|their) sex\\.",
+    "(?i)(your|his|her|their) sex\\b",
     "(?i)sent (shockwaves|shock waves)",
     "(?i)in a rhythm",
     "(?i)exhausted and spent",
