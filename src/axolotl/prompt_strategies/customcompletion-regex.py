@@ -6,6 +6,7 @@ import logging
 from collections import defaultdict
 from typing import Generator, List, Tuple
 import re
+import ftfy
 
 # Import from axolotl package
 from axolotl.prompt_tokenizers import (
@@ -205,6 +206,7 @@ REGEX_PATTERNS = [
     "end of (session|story|rp|roleplay|chat|chapter)",
     "thanks for (posting|reading|sharing)",
     "thank you for (posting|reading|sharing)",
+    "(.|!|?|:)  ",
     # https://github.com/meta-llama/PurpleLlama/commit/4b807228b6803ea5b8eb065179f8e90747512018
     "I (?:do not|don’t|don't) (?:have the ability|have access|understand|support)",
     "I (?:cannot|can’t|can't|can not|won't|woun’t|will not|am not able to|am unable to) (?:access|help(?: you)? with|provide|create|advice|generate|assist|fulfill your request|replace)",
@@ -264,7 +266,7 @@ class CustomLLaMa3PromptTokenizingStrategy(PromptTokenizingStrategy):
 
         # Get entire tokenized text
         res = self.tokenizer(
-            prompt["text"].strip(),
+            ftfy.fix_text(prompt["text"].strip()),
             truncation=False,
             padding=False,
             return_tensors=None,
