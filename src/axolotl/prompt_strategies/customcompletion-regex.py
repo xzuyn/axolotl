@@ -256,9 +256,10 @@ class CustomLLaMa3PromptTokenizingStrategy(PromptTokenizingStrategy):
     Tokenizing strategy for CustomLLaMa3.
     """
 
-    def __init__(self, prompter, tokenizer, *args, **kwargs):
+    def __init__(self, prompter, tokenizer, field, *args, **kwargs):
         # Call the superclass' constructor
         super().__init__(prompter, tokenizer, *args, **kwargs)
+        self.field = field
 
     def tokenize_prompt(self, prompt):
         # Tokenize the prompt based on its conversations
@@ -266,7 +267,7 @@ class CustomLLaMa3PromptTokenizingStrategy(PromptTokenizingStrategy):
 
         # Get entire tokenized text
         res = self.tokenizer(
-            ftfy.fix_text(prompt["text"].strip()),  # TODO: Add support for `field` dataset config option
+            ftfy.fix_text(prompt[self.field].strip()),
             truncation=False,
             padding=False,
             return_tensors=None,
@@ -304,10 +305,9 @@ class CustomLLaMa3Prompter:
 
 
 # Function to load the CustomLLaMa3PromptTokenizingStrategy
-def load(tokenizer, cfg):
+def load(tokenizer, cfg, ds_cfg):
     return CustomLLaMa3PromptTokenizingStrategy(
         CustomLLaMa3Prompter(),  # TODO: Remove this as it doesn't get used
         tokenizer,
-        cfg.train_on_inputs,
-        cfg.sequence_len
+        ds_cfg.field
     )
