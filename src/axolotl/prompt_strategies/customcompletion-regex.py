@@ -135,7 +135,7 @@ REGEX_PATTERNS = [
     "a testament to",
     "a moth to a flame",
     "canvas",
-    "eyes glint(|ed)",
+    "eyes glint(|ed|ing)",
     "camaraderie",
     "humble abode",
     "cold and calculating",
@@ -276,7 +276,7 @@ class CustomLLaMa3PromptTokenizingStrategy(PromptTokenizingStrategy):
         # Mask out undesired tokens using regex patterns
         res["attention_mask"], match_count = mask_regex_attention(self, res, COMPILED_REGEX_PATTERNS)
 
-        labels = [label if mask == 1 else IGNORE_TOKEN_ID for label, mask in zip(res["input_ids"], res["attention_mask"])][len(prefix["input_ids"]):]
+        labels = [label if mask == 1 else IGNORE_TOKEN_ID for label, mask in zip(res["input_ids"], res["attention_mask"])]
 
         # Parse tokenized result and update current length
         result, current_len = parse_tokenized_to_result(
