@@ -21,7 +21,7 @@ LOG = logging.getLogger("axolotl")
 IGNORE_TOKEN_ID = -100
 REGEX_PATTERNS = [
     "haze of pleasure",
-    "finds solace in",
+    "find(|s|ing) solace in",
     "reveling in the satisfaction",
     "with each breath",
     "a delicate dance",
@@ -112,6 +112,7 @@ REGEX_PATTERNS = [
     "straddles (my|your|his|her|their) (waist|lap)",
     "words turn into a purr",
     "grips like a vice",
+    "sends shivers (up|down) (my|your|his|her|their) spine",
     "shivers run(|ning) (up|down) (my|your|his|her|their) spine",
     "arched spine",
     "penetrated to the hilt",
@@ -202,7 +203,7 @@ REGEX_PATTERNS = [
     "you(|')re a bold one",
     "(‘|’|“|”|…)"
 ]
-COMPILED_REGEX_PATTERNS = [re.compile(pattern) for pattern in REGEX_PATTERNS]
+COMPILED_REGEX_PATTERNS = [re.compile(pattern.lower()) for pattern in REGEX_PATTERNS]
 
 
 def mask_regex_attention(self, input_data, compiled_regex_patterns):
@@ -218,7 +219,7 @@ def mask_regex_attention(self, input_data, compiled_regex_patterns):
 
     # For each regex pattern, find all its occurrences in the text.
     for pattern in compiled_regex_patterns:
-        for match in pattern.finditer(input_text):
+        for match in pattern.finditer(input_text.lower()):
             found_index = match.start()
             end_index = match.end()
             # Check each token's character span; if it overlaps, mask it out.
