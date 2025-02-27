@@ -6,6 +6,7 @@ import logging
 from collections import defaultdict
 from typing import Generator, List, Tuple
 import re
+import ftfy
 
 # Import from axolotl package
 from axolotl.prompt_tokenizers import (
@@ -324,7 +325,7 @@ class CustomLLaMa3PromptTokenizingStrategy(PromptTokenizingStrategy):
             # Get entire tokenized turn
             res = self.tokenizer(
                 f"<|start_header_id|>{role_name}<|end_header_id|>\n\n"
-                f"{sharegpt_value.strip()}<|eot_id|>",
+                f"{ftfy.fix_text(sharegpt_value.strip())}<|eot_id|>",
                 truncation=False,
                 padding=False,
                 return_tensors=None,
