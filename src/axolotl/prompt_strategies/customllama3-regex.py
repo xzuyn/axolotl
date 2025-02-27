@@ -208,6 +208,8 @@ REGEX_PATTERNS = [
     "thanks for (posting|reading|sharing)",
     "thank you for (posting|reading|sharing)",
     "[!:\\.;?*]  ",
+    # URLs
+    "\\b(?:https?:\\/\\/|ftp:\\/\\/|smtp:\\/\\/)?(?:www\\.)?[\\w.-]+(?:\\.[\\w.-]+)+(?:\\/[\\w.,@?^=%&~+-]*)*(?:[?#][\\w.,@?^=%&~+-]*)?\\b",
     # Thinking test
     "<(think|thinking|thought|thoughts)>",
     # https://github.com/meta-llama/PurpleLlama/commit/4b807228b6803ea5b8eb065179f8e90747512018
