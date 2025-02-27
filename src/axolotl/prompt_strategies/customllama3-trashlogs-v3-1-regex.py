@@ -21,13 +21,13 @@ LOG = logging.getLogger("axolotl")
 
 # Define a constant token ID to ignore
 IGNORE_TOKEN_ID = -100
-# URL_FINDING_REGEX_PATTERN = (
-#     r"\b(?:https?|ftp|smtp):\/\/"  # Word boundary + protocol
-#     r"([a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}"  # Domain name
-#     r"(:\d{1,5})?"  # Optional port
-#     r"(\/[a-zA-Z0-9#\/?=&._-]*)?"  # Path, query parameters, or fragments
-#     r"\b"  # Word boundary to prevent partial matches
-# )
+URL_FINDING_REGEX_PATTERN = (
+    r"\b(?:https?|ftp|smtp):\/\/"  # Word boundary + protocol
+    r"([a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}"  # Domain name
+    r"(:\d{1,5})?"  # Optional port
+    r"(\/[a-zA-Z0-9#\/?=&._-]*)?"  # Path, query parameters, or fragments
+    r"\b"  # Word boundary to prevent partial matches
+)
 
 # TODO: Remove/merge duplicates, and add more variations on patterns
 REGEX_PATTERNS = [
@@ -218,8 +218,7 @@ REGEX_PATTERNS = [
     "thanks for (posting|reading|sharing)",
     "thank you for (posting|reading|sharing)",
     "[!:\\.;?*]  ",
-    # URLs
-    "\\b(?:https?:\\/\\/|ftp:\\/\\/|smtp:\\/\\/)?(?:www\\.)?[\\w.-]+(?:\\.[\\w.-]+)+(?:\\/[\\w.,@?^=%&~+-]*)*(?:[?#][\\w.,@?^=%&~+-]*)?\\b",
+    "\\.{4,}",
     # Thinking test
     "<(think|thinking|thought|thoughts)>",
     # https://github.com/meta-llama/PurpleLlama/commit/4b807228b6803ea5b8eb065179f8e90747512018
@@ -356,6 +355,7 @@ class CustomLLaMa3TrashLogsV3PromptTokenizingStrategy(PromptTokenizingStrategy):
                 turn["attachments"]
                 or turn["stickers"]
                 or turn["isbot"]
+                or re.search(URL_FINDING_REGEX_PATTERN, turn_value)
                 or "#" in turn_value  # TODO: Find a better way to check if a turn mentions another channel
                 or turn["type"] not in {"Default", "Reply"}
             ):
