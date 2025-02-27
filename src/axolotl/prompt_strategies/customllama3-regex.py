@@ -96,7 +96,7 @@ REGEX_PATTERNS = [
     "our shared experiences",
     "bond(|s) built on mutual trust",
     "the ball is in (my|your|his|her|their) court",
-    "little did (you|he|she|they) know",
+    "little did (i|you|he|she|they) know",
     "a pregnant silence",
     "beats like a (\\w+\\s+)?drum",
     "\\bpert\\b",
