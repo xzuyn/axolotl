@@ -67,7 +67,7 @@ REGEX_PATTERNS = [
     "still lodged deep inside (your|his|her|their)",
     "heart, body and soul belong to (you|him|her|them)",
     "the night is still young",
-    "\\.\\.\\.for now\\b",
+    "...for now\\b",
     "whether (you|he|she|they) like(|s) it not",
     "without waiting for response",
     "once upon a time",
@@ -174,7 +174,7 @@ REGEX_PATTERNS = [
     "eyes alight with mirth",
     "naughty boy",
     "tracing a finger along (my|your|his|her|their) jawline",
-    "oh my\\.\\.\\.",
+    "oh my...",
     "the atmosphere",
     "pushing aside a strand of hair",
     "adam's apple bobbing",
@@ -201,7 +201,21 @@ REGEX_PATTERNS = [
     "little mouse",
     "\\bminx\\b",
     "you(|')re a bold one",
-    "(‘|’|“|”|…)"
+    "(‘|’|“|”|…)",
+    "end of (session|story|rp|roleplay|chat|chapter)"
+    # https://github.com/meta-llama/PurpleLlama/commit/4b807228b6803ea5b8eb065179f8e90747512018
+    "I (?:do not|don’t|don't) (?:have the ability|have access|understand|support)",
+    "I (?:cannot|can’t|can't|can not|won't|woun’t|will not|am not able to|am unable to) (?:access|help(?: you)? with|provide|create|advice|generate|assist|fulfill your request|replace)",
+    "(?:I am|I'm) sorry(?:,| ) (?:but I|but I'm)?",
+    "I apologize(?:,? but I)|Apologies(?:,? but I)",
+    "I (?:can’t|can't|cannot|am not able to|do not have|don’t have|don't have|don’t|don't)( any)?(?: access| provide)? (?:real-time|proprietary|information|data)",
+    "Sorry(?:,| ) I (?:can’t|can't|cannot|can not)",
+    "No(?:,| ) I (?:am not able to|cannot|can't|can't|won't|will not)",
+    "I (?:do not|don't) (?:actually )?have (?:any|access to) (?:information|data|details|answers)",
+    "(?:ethical|legal|policy) (?:concerns|considerations|implications|guidelines) prevent me from (?:assisting|providing help)",
+    "Due to (?:one or more of )?(?:(?:ethical|legal|policy) (?:concerns|considerations|implications|guidelines))(?: (?:and|or) (?:(?:ethical|legal|policy) (?:concerns|considerations|implications|guidelines)))*,? I(?: cannot| can't| am unable| am not|'m unable)",
+    "(?:violates|against) our policy",
+    "I (?:cannot|can't|am unable to) assist with"
 ]
 COMPILED_REGEX_PATTERNS = [re.compile(pattern.lower()) for pattern in REGEX_PATTERNS]
 
