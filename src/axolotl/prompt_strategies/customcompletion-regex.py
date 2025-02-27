@@ -1,4 +1,4 @@
-"""Module containing the CustomLLaMa3PromptTokenizingStrategy class"""
+"""Module containing the CustomCompletionPromptTokenizingStrategy class"""
 
 # Import necessary modules and functions
 import copy
@@ -256,9 +256,9 @@ def mask_regex_attention(self, input_data, compiled_regex_patterns):
     return new_attention_mask, match_count
 
 
-class CustomLLaMa3PromptTokenizingStrategy(PromptTokenizingStrategy):
+class CustomCompletionPromptTokenizingStrategy(PromptTokenizingStrategy):
     """
-    Tokenizing strategy for CustomLLaMa3.
+    Tokenizing strategy for CustomCompletion.
     """
 
     def __init__(self, prompter, tokenizer, field, *args, **kwargs):
@@ -299,9 +299,9 @@ class CustomLLaMa3PromptTokenizingStrategy(PromptTokenizingStrategy):
 
 
 # TODO: Remove this as it doesn't get used
-class CustomLLaMa3Prompter:
+class CustomCompletionPrompter:
     """
-    Prompter for CustomLLaMa3.
+    Prompter for CustomCompletion.
     """
 
     def __init__(self, *args, **kwargs):
@@ -309,10 +309,10 @@ class CustomLLaMa3Prompter:
         pass
 
 
-# Function to load the CustomLLaMa3PromptTokenizingStrategy
+# Function to load the CustomCompletionPromptTokenizingStrategy
 def load(tokenizer, cfg, ds_cfg):
-    return CustomLLaMa3PromptTokenizingStrategy(
-        CustomLLaMa3Prompter(),  # TODO: Remove this as it doesn't get used
+    return CustomCompletionPromptTokenizingStrategy(
+        CustomCompletionPrompter(),  # TODO: Remove this as it doesn't get used
         tokenizer,
         ds_cfg.field
     )
