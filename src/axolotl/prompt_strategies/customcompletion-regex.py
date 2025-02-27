@@ -235,8 +235,10 @@ def mask_regex_attention(self, input_data, compiled_regex_patterns):
     new_attention_mask = input_data["attention_mask"].copy()
 
     # For each regex pattern, find all its occurrences in the text.
+    match_count = 0
     for pattern in compiled_regex_patterns:
         for match in pattern.finditer(input_text.lower()):
+            match_count += 1
             found_index = match.start()
             end_index = match.end()
             # Check each token's character span; if it overlaps, mask it out.
@@ -244,7 +246,7 @@ def mask_regex_attention(self, input_data, compiled_regex_patterns):
                 if token_start < end_index and token_end > found_index:
                     new_attention_mask[i] = 0
 
-    return new_attention_mask
+    return new_attention_mask, match_count
 
 
 class CustomLLaMa3PromptTokenizingStrategy(PromptTokenizingStrategy):
@@ -272,13 +274,9 @@ class CustomLLaMa3PromptTokenizingStrategy(PromptTokenizingStrategy):
             res["attention_mask"].append(1)
 
         # Mask out undesired tokens using regex patterns
-        res["attention_mask"] = mask_regex_attention(self, res, COMPILED_REGEX_PATTERNS)
+        res["attention_mask"], match_count = mask_regex_attention(self, res, COMPILED_REGEX_PATTERNS)
 
-        labels = [
-            label if mask == 1
-            else IGNORE_TOKEN_ID
-            for label, mask in zip(res["input_ids"], res["attention_mask"])
-        ]
+        labels = [label if mask == 1 else IGNORE_TOKEN_ID for label, mask in zip(res["input_ids"], res["attention_mask"])][len(prefix["input_ids"]):]
 
         # Parse tokenized result and update current length
         result, current_len = parse_tokenized_to_result(
