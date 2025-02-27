@@ -96,7 +96,7 @@ REGEX_PATTERNS = [
     "our shared experiences",
     "bond(|s) built on mutual trust",
     "the ball is in (my|your|his|her|their) court",
-    "little did (you|he|she|they) know",
+    "little did (i|you|he|she|they) know",
     "a pregnant silence",
     "beats like a (\\w+\\s+)?drum",
     "\\bpert\\b",
@@ -266,7 +266,7 @@ class CustomLLaMa3PromptTokenizingStrategy(PromptTokenizingStrategy):
 
         # Get entire tokenized text
         res = self.tokenizer(
-            ftfy.fix_text(prompt["text"].strip()),
+            ftfy.fix_text(prompt["text"].strip()),  # TODO: Add support for `field` dataset config option
             truncation=False,
             padding=False,
             return_tensors=None,
