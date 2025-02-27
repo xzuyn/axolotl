@@ -320,7 +320,7 @@ class CustomLLaMa3TrashLogsV3PromptTokenizingStrategy(PromptTokenizingStrategy):
             # Get tokens which will be masked out if using train_on_inputs: false
             prefix = self.tokenizer(
                 (
-                    f"<|start_header_id|>{turn_from}<|end_header_id|>\n\n"
+                    f"<|start_header_id|>{ftfy.fix_text(turn_from)}<|end_header_id|>\n\n"
                 ),
                 truncation=False,
                 padding=False,
@@ -333,7 +333,7 @@ class CustomLLaMa3TrashLogsV3PromptTokenizingStrategy(PromptTokenizingStrategy):
             # Get entire tokenized turn
             res = self.tokenizer(
                 (
-                    f"<|start_header_id|>{turn_from}<|end_header_id|>\n\n"
+                    f"<|start_header_id|>{ftfy.fix_text(turn_from)}<|end_header_id|>\n\n"
                     f"{ftfy.fix_text(turn_value.strip())}<|eot_id|>"
                 ),
                 truncation=False,
