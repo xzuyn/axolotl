@@ -248,20 +248,22 @@ def mask_regex_attention(
     original_offset_mapping,
     compiled_regex_patterns
 ):
-    # Make a copy of the original attention_mask.
-    new_attention_mask, new_labels = original_attention_mask.copy(), original_input_ids.copy()
+    # Make a copy of the original attention_mask and labels
+    new_attention_mask = original_attention_mask.copy()
+    new_labels = [
+        label if mask == 1 else IGNORE_TOKEN_ID for label, mask in zip(original_input_ids, original_attention_mask)
+    ]
 
     # For each regex pattern, find all its occurrences in the text.
-    match_count = 0
     for pattern in compiled_regex_patterns:
         for match in pattern.finditer(original_text):
-            match_count += 1
             found_index = match.start()
             end_index = match.end()
+
             # Check each token's character span; if it overlaps, mask it out.
             for i, (token_start, token_end) in enumerate(original_offset_mapping):
                 if token_start < end_index and token_end > found_index:
-                    new_attention_mask[i], new_labels[i] = 0, -100
+                    new_attention_mask[i], new_labels[i] = 0, IGNORE_TOKEN_ID
 
     return original_input_ids, new_attention_mask, new_labels
 
@@ -394,21 +396,10 @@ class CustomLLaMa3TrashLogsV3PromptTokenizingStrategy(PromptTokenizingStrategy):
         }
 
 
-# TODO: Remove this as it doesn't get used
-class CustomLLaMa3TrashLogsV3Prompter:
-    """
-    Prompter for CustomLLaMa3TrashLogsV3.
-    """
-
-    def __init__(self, *args, **kwargs):
-        # Constructor does nothing
-        pass
-
-
 # Function to load the CustomLLaMa3TrashLogsV3PromptTokenizingStrategy
 def load(tokenizer, cfg):
     return CustomLLaMa3TrashLogsV3PromptTokenizingStrategy(
-        CustomLLaMa3TrashLogsV3Prompter(),  # TODO: Remove this as it doesn't get used
+        None,
         tokenizer,
         cfg.train_on_inputs,
         cfg.sequence_len
