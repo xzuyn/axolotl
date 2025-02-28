@@ -344,7 +344,6 @@ class CustomLLaMa3PromptTokenizingStrategy(PromptTokenizingStrategy):
             if prefix["input_ids"][0] == self.tokenizer.bos_token_id and strip_bos:
                 prefix["input_ids"] = prefix["input_ids"][1:]
                 prefix["attention_mask"] = prefix["attention_mask"][1:]
-                prefix["labels"] = prefix["labels"][1:]
 
             # Get entire tokenized turn
             tokenized_text = self.tokenizer(
