@@ -351,6 +351,7 @@ class CustomLLaMa3TrashLogsV3PromptTokenizingStrategy(PromptTokenizingStrategy):
             if res["input_ids"][0] == self.tokenizer.bos_token_id and strip_bos:
                 res["input_ids"] = res["input_ids"][1:]
                 res["attention_mask"] = res["attention_mask"][1:]
+                res["offset_mapping"] = res["offset_mapping"][1:]
 
             # If the turn has an attachment, has an url, is from a bot, mentions another channel, or isn't a regular message or reply, mask entire turn
             # Teaching it to output any of this stuff is probably bad, but would probably also be bad contextually to remove all together
