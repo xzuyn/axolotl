@@ -9,11 +9,8 @@ import re
 import ftfy
 
 # Import from axolotl package
-from axolotl.prompt_tokenizers import (
-    PromptTokenizingStrategy,
-    parse_tokenized_to_result,
-    tokenize_prompt_default,
-)
+from axolotl.prompt_tokenizers import PromptTokenizingStrategy
+
 
 # Set up logging
 LOG = logging.getLogger("axolotl")
@@ -235,30 +232,32 @@ REGEX_PATTERNS = [
 COMPILED_REGEX_PATTERNS = [re.compile(pattern) for pattern in REGEX_PATTERNS]
 
 
-def mask_regex_attention(self, input_data, compiled_regex_patterns):
-    # Decode the input_ids back to text.
-    input_text = self.tokenizer.decode(input_data["input_ids"])
-
-    # Re-tokenize the text with offset mapping using the same options as the original tokenization.
-    encoded = self.tokenizer(input_text, return_offsets_mapping=True, add_special_tokens=False)
-    offset_mapping = encoded["offset_mapping"]
-
+def mask_regex_attention(
+    self,
+    original_text,
+    original_input_ids,
+    original_attention_mask,
+    original_offset_mapping,
+    compiled_regex_patterns
+):
     # Make a copy of the original attention_mask.
-    new_attention_mask = input_data["attention_mask"].copy()
+    new_attention_mask = original_attention_mask.copy()
 
     # For each regex pattern, find all its occurrences in the text.
     match_count = 0
     for pattern in compiled_regex_patterns:
-        for match in pattern.finditer(input_text):
+        for match in pattern.finditer(original_text):
             match_count += 1
             found_index = match.start()
             end_index = match.end()
             # Check each token's character span; if it overlaps, mask it out.
-            for i, (token_start, token_end) in enumerate(offset_mapping):
+            for i, (token_start, token_end) in enumerate(original_offset_mapping):
                 if token_start < end_index and token_end > found_index:
                     new_attention_mask[i] = 0
 
-    return new_attention_mask, match_count
+    new_labels = [label if mask == 1 else IGNORE_TOKEN_ID for label, mask in zip(original_input_ids, new_attention_mask)]
+
+    return original_input_ids, new_attention_mask, new_labels
 
 
 class CustomLLaMa3PromptTokenizingStrategy(PromptTokenizingStrategy):
@@ -271,9 +270,6 @@ class CustomLLaMa3PromptTokenizingStrategy(PromptTokenizingStrategy):
         super().__init__(prompter, tokenizer, *args, **kwargs)
 
     def tokenize_prompt(self, prompt):
-        # Tokenize the prompt based on its conversations
-        result, current_len = tokenize_prompt_default()
-
         # Sometimes it gets named 'conversations' and other times 'conversation'
         if "conversations" in prompt:
             conversation_name = "conversations"
@@ -285,6 +281,7 @@ class CustomLLaMa3PromptTokenizingStrategy(PromptTokenizingStrategy):
 
         # Iterate over each conversation turn in the prompt
         num_turns = len(prompt[conversation_name])
+        input_ids, attention_mask, labels = [], [], []
         for i, turn in enumerate(prompt[conversation_name]):
             # Strip BOS token if it's not the first turn
             if i == 0:
@@ -338,6 +335,7 @@ class CustomLLaMa3PromptTokenizingStrategy(PromptTokenizingStrategy):
                 truncation=False,
                 padding=False,
                 return_tensors=None,
+                return_offsets_mapping=True
             )
             if res["input_ids"][-1] != self.tokenizer.eos_token_id and end_of_text:
                 res["input_ids"].append(self.tokenizer.eos_token_id)
@@ -352,32 +350,52 @@ class CustomLLaMa3PromptTokenizingStrategy(PromptTokenizingStrategy):
                 or sharegpt_from == "human"
                 or sharegpt_from == "human-chat"
             ):
-                labels = [IGNORE_TOKEN_ID] * len(res["input_ids"])
+                turn_input_ids = res["input_ids"]
+                turn_attention_mask = [0] * len(res["attention_mask"])
+                turn_labels = [IGNORE_TOKEN_ID] * len(res["input_ids"])
             # Handle partially masked model turn
             elif self.train_on_inputs is False and (
                 sharegpt_from == "gpt"
                 or sharegpt_from == "gpt-chat"
                 or sharegpt_from == "thought"
             ):
-                res["attention_mask"], match_count = mask_regex_attention(self, res, COMPILED_REGEX_PATTERNS)
-                labels = (
+                turn_input_ids, turn_attention_mask, turn_labels = mask_regex_attention(
+                    self=self,
+                    original_text=ftfy.fix_text(sharegpt_value.strip()),
+                    original_input_ids=res["input_ids"],
+                    original_attention_mask=res["attention_mask"],
+                    original_offset_mapping=res["offset_mapping"],
+                    compiled_regex_patterns=COMPILED_REGEX_PATTERNS
+                )
+                turn_attention_mask = (
+                    [0] * len(prefix["attention_mask"])  # Mask the prefix
+                    + turn_attention_mask[len(prefix["attention_mask"]):]
+                )
+                turn_labels = (
                     [IGNORE_TOKEN_ID] * len(prefix["input_ids"])  # Mask the prefix
-                    + [label if mask == 1 else IGNORE_TOKEN_ID for label, mask in zip(res["input_ids"], res["attention_mask"])][len(prefix["input_ids"]):]
+                    + [label if mask == 1 else IGNORE_TOKEN_ID for label, mask in zip(turn_input_ids, turn_attention_mask)][len(prefix["input_ids"]):]
                 )
             # Handle unmasked turn
             else:
-                labels = res["input_ids"]
+                # Mask out undesired tokens using regex patterns
+                turn_input_ids, turn_attention_mask, turn_labels = mask_regex_attention(
+                    self=self,
+                    original_text=ftfy.fix_text(sharegpt_value.strip()),
+                    original_input_ids=res["input_ids"],
+                    original_attention_mask=res["attention_mask"],
+                    original_offset_mapping=res["offset_mapping"],
+                    compiled_regex_patterns=COMPILED_REGEX_PATTERNS
+                )
 
-            # Parse tokenized result and update current length
-            result, current_len = parse_tokenized_to_result(
-                result,
-                current_len,
-                res,
-                labels,
-                pad_token_id=self.tokenizer.pad_token_id,
-            )
+            input_ids += turn_input_ids
+            attention_mask += turn_attention_mask
+            labels += turn_labels
 
-        return result
+        return {
+            "input_ids": input_ids,
+            "attention_mask": attention_mask,
+            "labels": labels,
+        }
 
 
 # TODO: Remove this as it doesn't get used
