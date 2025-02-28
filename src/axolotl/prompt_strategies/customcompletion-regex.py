@@ -308,16 +308,16 @@ class CustomCompletionPromptTokenizingStrategy(PromptTokenizingStrategy):
             compiled_regex_patterns=COMPILED_REGEX_PATTERNS,
         )
 
-        # Fix missing or unmasked BOS token
+        # Add missing BOS token
         if self.tokenizer.bos_token_id and tokenized_text["input_ids"][0] != self.tokenizer.bos_token_id:
             tokenized_text["input_ids"].insert(0, self.tokenizer.bos_token_id)
             tokenized_text["attention_mask"].insert(0, 0)
             tokenized_text["labels"].insert(0, IGNORE_TOKEN_ID)
+        # Mask unmasked BOS token
         elif self.tokenizer.bos_token_id and tokenized_text["input_ids"][0] == self.tokenizer.bos_token_id:
             tokenized_text["attention_mask"][0] = 0
             tokenized_text["labels"][0] = IGNORE_TOKEN_ID
-
-        # Fix missing EOS token
+        # Add missing EOS token
         if tokenized_text["input_ids"][-1] != self.tokenizer.eos_token_id:
             tokenized_text["input_ids"].append(self.tokenizer.eos_token_id)
             tokenized_text["attention_mask"].append(1)
