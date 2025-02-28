@@ -307,21 +307,10 @@ class CustomCompletionPromptTokenizingStrategy(PromptTokenizingStrategy):
         }
 
 
-# TODO: Remove this as it doesn't get used
-class CustomCompletionPrompter:
-    """
-    Prompter for CustomCompletion.
-    """
-
-    def __init__(self, *args, **kwargs):
-        # Constructor does nothing
-        pass
-
-
 # Function to load the CustomCompletionPromptTokenizingStrategy
 def load(tokenizer, cfg, ds_cfg):
     return CustomCompletionPromptTokenizingStrategy(
-        CustomCompletionPrompter(),  # TODO: Remove this as it doesn't get used
+        None,
         tokenizer,
         ds_cfg.field
     )
