@@ -251,7 +251,9 @@ def mask_regex_attention(
     # Make a copy of the original attention_mask and labels
     new_attention_mask = original_attention_mask.copy()
     new_labels = [
-        label if mask == 1 else IGNORE_TOKEN_ID for label, mask in zip(original_input_ids, original_attention_mask)
+        label if mask == 1
+        else IGNORE_TOKEN_ID
+        for label, mask in zip(original_input_ids, original_attention_mask)
     ]
 
     # For each regex pattern, find all its occurrences in the text.
@@ -390,6 +392,21 @@ class CustomLLaMa3TrashLogsV3PromptTokenizingStrategy(PromptTokenizingStrategy):
             input_ids += turn_input_ids
             attention_mask += turn_attention_mask
             labels += turn_labels
+
+        # Fix missing or unmasked BOS token
+        if self.tokenizer.bos_token_id and input_ids[0] != self.tokenizer.bos_token_id:
+            input_ids.insert(0, self.tokenizer.bos_token_id)
+            labels.insert(0, IGNORE_TOKEN_ID)
+            attention_mask.insert(0, 0)
+        elif self.tokenizer.bos_token_id and input_ids[0] == self.tokenizer.bos_token_id:
+            labels[0] = IGNORE_TOKEN_ID
+            attention_mask[0] = 0
+
+        # Fix missing EOS token
+        if input_ids[-1] != self.tokenizer.eos_token_id:
+            input_ids.append(self.tokenizer.eos_token_id)
+            labels.append(self.tokenizer.eos_token_id)
+            attention_mask.append(1)
 
         return {
             "input_ids": input_ids,
