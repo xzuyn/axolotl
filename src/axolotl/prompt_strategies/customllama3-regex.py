@@ -346,6 +346,7 @@ class CustomLLaMa3PromptTokenizingStrategy(PromptTokenizingStrategy):
             if res["input_ids"][0] == self.tokenizer.bos_token_id and strip_bos:
                 res["input_ids"] = res["input_ids"][1:]
                 res["attention_mask"] = res["attention_mask"][1:]
+                res["offset_mapping"] = res["offset_mapping"][1:]
 
             # Handle masked user turn
             if self.train_on_inputs is False and (
