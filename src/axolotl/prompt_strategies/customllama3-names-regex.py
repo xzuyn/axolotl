@@ -316,7 +316,7 @@ class CustomLLaMa3PromptTokenizingStrategy(PromptTokenizingStrategy):
 
             # Get tokens which will be masked out if using train_on_inputs: false
             prefix = self.tokenizer(
-                f"<|start_header_id|>{role_name}<|end_header_id|>\n\n",
+                text=f"<|start_header_id|>{role_name}<|end_header_id|>\n\n",
                 truncation=False,
                 padding=False,
                 return_tensors=None,
@@ -327,8 +327,10 @@ class CustomLLaMa3PromptTokenizingStrategy(PromptTokenizingStrategy):
 
             # Get entire tokenized turn
             res = self.tokenizer(
-                f"<|start_header_id|>{role_name}<|end_header_id|>\n\n"
-                f"{ftfy.fix_text(sharegpt_value.strip())}<|eot_id|>",
+                text=(
+                    f"<|start_header_id|>{role_name}<|end_header_id|>\n\n"
+                    f"{ftfy.fix_text(sharegpt_value.strip())}<|eot_id|>"
+                ),
                 truncation=False,
                 padding=False,
                 return_tensors=None,
@@ -357,7 +359,10 @@ class CustomLLaMa3PromptTokenizingStrategy(PromptTokenizingStrategy):
             ):
                 # Mask out undesired tokens using regex patterns
                 turn_input_ids, turn_attention_mask, turn_labels = mask_regex_attention(
-                    original_text=ftfy.fix_text(sharegpt_value.strip()),
+                    original_text=(
+                        f"<|start_header_id|>{role_name}<|end_header_id|>\n\n"
+                        f"{ftfy.fix_text(sharegpt_value.strip())}<|eot_id|>"
+                    ),
                     original_input_ids=res["input_ids"],
                     original_attention_mask=res["attention_mask"],
                     original_offset_mapping=res["offset_mapping"],
@@ -376,7 +381,10 @@ class CustomLLaMa3PromptTokenizingStrategy(PromptTokenizingStrategy):
             else:
                 # Mask out undesired tokens using regex patterns
                 turn_input_ids, turn_attention_mask, turn_labels = mask_regex_attention(
-                    original_text=ftfy.fix_text(sharegpt_value.strip()),
+                    original_text=(
+                        f"<|start_header_id|>{role_name}<|end_header_id|>\n\n"
+                        f"{ftfy.fix_text(sharegpt_value.strip())}<|eot_id|>"
+                    ),
                     original_input_ids=res["input_ids"],
                     original_attention_mask=res["attention_mask"],
                     original_offset_mapping=res["offset_mapping"],
