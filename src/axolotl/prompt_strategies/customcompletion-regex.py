@@ -4,7 +4,7 @@
 import copy
 import logging
 from collections import defaultdict
-from typing import Generator, List, Tuple
+from typing import Generator, List, Tuple, Pattern
 import re
 import ftfy
 
@@ -133,6 +133,7 @@ REGEX_PATTERNS = [
     "(?i)a moth to a flame",
     "(?i)canvas",
     "(?i)eyes glint(|ed|ing)",
+    "(?i)eyes glinting",
     "(?i)camaraderie",
     "(?i)humble abode",
     "(?i)cold and calculating",
@@ -233,12 +234,33 @@ COMPILED_REGEX_PATTERNS = [re.compile(pattern) for pattern in REGEX_PATTERNS]
 
 
 def mask_regex_attention(
-    text,
-    input_ids,
-    attention_mask,
-    offset_mapping,
-    compiled_regex_patterns
-):
+    text: str,
+    input_ids: List[int],
+    attention_mask: List[int],
+    offset_mapping: List[Tuple[int, int]],
+    compiled_regex_patterns: List[Pattern[str]]
+) -> Tuple[List[int], List[int], List[int]]:
+    """
+    Masks tokens in the attention_mask and corresponding labels based on regex matches in the text.
+
+    Parameters:
+        text (str): The original text.
+        input_ids (List[int]): The list of token IDs.
+        attention_mask (List[int]): Binary mask indicating which tokens are valid.
+        offset_mapping (List[Tuple[int, int]]): List of (start, end) indices for each token.
+        compiled_regex_patterns (List[Pattern[str]]): List of precompiled regex patterns.
+
+    Returns:
+        Tuple containing:
+            - input_ids (List[int]): Unmodified token IDs.
+            - attention_mask (List[int]): Modified attention mask with masked tokens set to 0.
+            - labels (List[int]): Labels, where masked tokens have IGNORE_TOKEN_ID.
+    """
+
+    # Validate input lengths
+    if not (len(input_ids) == len(attention_mask) == len(offset_mapping)):
+        raise ValueError("Length of input_ids, attention_mask, and offset_mapping must be the same.")
+
     labels = [
         label if mask == 1
         else IGNORE_TOKEN_ID
