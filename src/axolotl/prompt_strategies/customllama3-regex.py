@@ -298,20 +298,9 @@ class CustomLLaMa3PromptTokenizingStrategy(PromptTokenizingStrategy):
         num_turns = len(prompt[conversation_name])
         input_ids, attention_mask, labels = [], [], []
         for i, turn in enumerate(prompt[conversation_name]):
-            # Strip BOS token if it's not the first turn
-            if i == 0:
-                strip_bos = False
-            else:
-                strip_bos = True
-
-            # Check if this is the last turn, so we know to add the EOS token
-            if i == num_turns - 1:
-                end_of_text = True
-            else:
-                end_of_text = False
-
             # Get correct roles and messages
             sharegpt_from, sharegpt_value = turn["from"].strip(), turn["value"].strip()
+
             # ShareGPT Roles
             if sharegpt_from == "system":
                 role_name = "system"
@@ -341,7 +330,7 @@ class CustomLLaMa3PromptTokenizingStrategy(PromptTokenizingStrategy):
             )
 
             # Strip unwanted BOS token
-            if prefix["input_ids"][0] == self.tokenizer.bos_token_id and strip_bos:
+            if prefix["input_ids"][0] == self.tokenizer.bos_token_id and (i != 0):
                 prefix["input_ids"] = prefix["input_ids"][1:]
                 prefix["attention_mask"] = prefix["attention_mask"][1:]
 
@@ -370,13 +359,13 @@ class CustomLLaMa3PromptTokenizingStrategy(PromptTokenizingStrategy):
             )
 
             # Strip unwanted BOS token
-            if tokenized_text["input_ids"][0] == self.tokenizer.bos_token_id and strip_bos:
+            if tokenized_text["input_ids"][0] == self.tokenizer.bos_token_id and (i != 0):
                 tokenized_text["input_ids"] = tokenized_text["input_ids"][1:]
                 tokenized_text["attention_mask"] = tokenized_text["attention_mask"][1:]
                 tokenized_text["labels"] = tokenized_text["labels"][1:]
 
             # Add missing EOS token
-            if tokenized_text["input_ids"][-1] != self.tokenizer.eos_token_id and end_of_text:
+            if tokenized_text["input_ids"][-1] != self.tokenizer.eos_token_id and (i == num_turns - 1):
                 tokenized_text["input_ids"].append(self.tokenizer.eos_token_id)
                 tokenized_text["attention_mask"].append(1)
                 tokenized_text["labels"].append(self.tokenizer.eos_token_id)
