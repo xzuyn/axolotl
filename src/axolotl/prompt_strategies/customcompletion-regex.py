@@ -5,7 +5,7 @@ import re
 import ftfy
 import copy
 import logging
-from typing import List, Tuple, Pattern
+from typing import List, Tuple, Pattern, Dict, Union
 
 # Import from axolotl package
 from axolotl.prompt_tokenizers import PromptTokenizingStrategy
@@ -18,8 +18,8 @@ LOG = logging.getLogger("axolotl")
 IGNORE_TOKEN_ID = -100
 REGEX_PATTERNS = [
     "(?i)haze of pleasure",
-    "(?i)find(|s|ing) solace in",
-    "(?i)reveling in the satisfaction",
+    "(?i)(find|found)(|s|ing) solace in",
+    "(?i)revel(|ing) in the satisfaction",
     "(?i)with each breath",
     "(?i)a delicate dance",
     "(?i)wet flesh",
@@ -30,12 +30,12 @@ REGEX_PATTERNS = [
     "(?i)the game is on",
     "(?i)the choice is (mine|yours|his|hers|theirs)",
     "(?i)i don't bite\\.\\.\\. unless you want me to",
-    "(?i)half-lidded eyes",
+    "(?i)half(|-)lidded eyes",
     "(?i)(he|she|they) worries (his|her|their) bottom lip",
     "(?i)warring with",
     "(?i)take your pleasure",
     "(?i)(you|he|she|they) fiddle(|s) with the hem of (my|your|his|her|their) (skirt|shirt|pants)",
-    "(?i)kiss-bruised lips",
+    "(?i)kiss(|-)bruised lips",
     "(?i)bruising kiss",
     "(?i)despite (himself|herself|themselves|themself)",
     "(?i)(yours|mine) to take",
@@ -110,7 +110,7 @@ REGEX_PATTERNS = [
     "(?i)words turn into a purr",
     "(?i)grips like a vice",
     "(?i)send(|s) shiver(|s) (up|down) (my|your|his|her|their) spine",
-    "(?i)shiver(|s) run(|ning) (up|down) (my|your|his|her|their) spine",
+    "(?i)shiver(|s) (run|ran)(|ning) (up|down) (my|your|his|her|their) spine",
     "(?i)arched spine",
     "(?i)penetrated to the hilt",
     "(?i)the pressure in (my|your|his|her|their) loins",
@@ -237,8 +237,8 @@ def mask_regex_attention(
     input_ids: List[int],
     attention_mask: List[int],
     offset_mapping: List[Tuple[int, int]],
-    compiled_regex_patterns: List[Pattern[str]],
-) -> Tuple[List[int], List[int], List[int]]:
+    compiled_regex_patterns: List[Pattern[str]]
+) -> Dict[str, Union[List[int], List[Tuple[int, int]]]]:
     """
     Masks tokens in the attention_mask and corresponding labels based on regex matches in the text.
 
@@ -250,10 +250,11 @@ def mask_regex_attention(
         compiled_regex_patterns (List[Pattern[str]]): List of precompiled regex patterns.
 
     Returns:
-        Tuple containing:
-            - input_ids (List[int]): Unmodified token IDs.
-            - attention_mask (List[int]): Modified attention mask with masked tokens set to 0.
-            - labels (List[int]): Labels with masked tokens set to IGNORE_TOKEN_ID.
+        Dict[str, Union[List[int], List[Tuple[int, int]]]]: A dictionary containing:
+            - "input_ids" (List[int]): Unmodified token IDs.
+            - "attention_mask" (List[int]): Modified attention mask with masked tokens set to 0.
+            - "offset_mapping" (List[Tuple[int, int]]): Unmodified list of (start, end) indices for each token.
+            - "labels" (List[int]): Labels with masked tokens set to -100.
     """
 
     # Validate input lengths
@@ -273,7 +274,7 @@ def mask_regex_attention(
                 if token_start < end_index and token_end > found_index:
                     attention_mask[i], labels[i] = 0, IGNORE_TOKEN_ID
 
-    return input_ids, attention_mask, labels
+    return {"input_ids": input_ids, "attention_mask": attention_mask, "offset_mapping": offset_mapping, "labels": labels}
 
 
 class CustomCompletionPromptTokenizingStrategy(PromptTokenizingStrategy):
@@ -299,7 +300,7 @@ class CustomCompletionPromptTokenizingStrategy(PromptTokenizingStrategy):
         )
 
         # Mask out undesired tokens using regex patterns
-        input_ids, attention_mask, labels = mask_regex_attention(
+        tokenized_text = mask_regex_attention(
             text=original_text,
             input_ids=tokenized_text["input_ids"],
             attention_mask=tokenized_text["attention_mask"],
@@ -308,24 +309,24 @@ class CustomCompletionPromptTokenizingStrategy(PromptTokenizingStrategy):
         )
 
         # Fix missing or unmasked BOS token
-        if self.tokenizer.bos_token_id and input_ids[0] != self.tokenizer.bos_token_id:
-            input_ids.insert(0, self.tokenizer.bos_token_id)
-            attention_mask.insert(0, 0)
-            labels.insert(0, IGNORE_TOKEN_ID)
-        elif self.tokenizer.bos_token_id and input_ids[0] == self.tokenizer.bos_token_id:
-            labels[0] = IGNORE_TOKEN_ID
-            attention_mask[0] = 0
+        if self.tokenizer.bos_token_id and tokenized_text["input_ids"][0] != self.tokenizer.bos_token_id:
+            tokenized_text["input_ids"].insert(0, self.tokenizer.bos_token_id)
+            tokenized_text["attention_mask"].insert(0, 0)
+            tokenized_text["labels"].insert(0, IGNORE_TOKEN_ID)
+        elif self.tokenizer.bos_token_id and tokenized_text["input_ids"][0] == self.tokenizer.bos_token_id:
+            tokenized_text["attention_mask"][0] = 0
+            tokenized_text["labels"][0] = IGNORE_TOKEN_ID
 
         # Fix missing EOS token
-        if input_ids[-1] != self.tokenizer.eos_token_id:
-            input_ids.append(self.tokenizer.eos_token_id)
-            attention_mask.append(1)
-            labels.append(self.tokenizer.eos_token_id)
+        if tokenized_text["input_ids"][-1] != self.tokenizer.eos_token_id:
+            tokenized_text["input_ids"].append(self.tokenizer.eos_token_id)
+            tokenized_text["attention_mask"].append(1)
+            tokenized_text["labels"].append(self.tokenizer.eos_token_id)
 
         return {
-            "input_ids": input_ids,
-            "attention_mask": attention_mask,
-            "labels": labels,
+            "input_ids": tokenized_text["input_ids"],
+            "attention_mask": tokenized_text["attention_mask"],
+            "labels": tokenized_text["labels"],
         }
 
 
