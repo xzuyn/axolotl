@@ -363,7 +363,8 @@ class CustomLLaMa3PromptTokenizingStrategy(PromptTokenizingStrategy):
                 offset_mapping=tokenized_text["offset_mapping"],
                 compiled_regex_patterns=COMPILED_REGEX_PATTERNS
             )
-            # Add missing BOS token
+
+            # Strip unwanted BOS token
             if tokenized_text["input_ids"][0] == self.tokenizer.bos_token_id and strip_bos:
                 tokenized_text["input_ids"] = tokenized_text["input_ids"][1:]
                 tokenized_text["attention_mask"] = tokenized_text["attention_mask"][1:]
@@ -406,16 +407,16 @@ class CustomLLaMa3PromptTokenizingStrategy(PromptTokenizingStrategy):
             attention_mask += tokenized_text["attention_mask"]
             labels += tokenized_text["labels"]
 
-        # Fix missing or unmasked BOS token
+        # Add missing BOS token
         if self.tokenizer.bos_token_id and input_ids[0] != self.tokenizer.bos_token_id:
             input_ids.insert(0, self.tokenizer.bos_token_id)
             labels.insert(0, IGNORE_TOKEN_ID)
             attention_mask.insert(0, 0)
+        # Mask unmasked BOS token
         elif self.tokenizer.bos_token_id and input_ids[0] == self.tokenizer.bos_token_id:
             labels[0] = IGNORE_TOKEN_ID
             attention_mask[0] = 0
-
-        # Fix missing EOS token
+        # Add missing EOS token
         if input_ids[-1] != self.tokenizer.eos_token_id:
             input_ids.append(self.tokenizer.eos_token_id)
             labels.append(self.tokenizer.eos_token_id)
