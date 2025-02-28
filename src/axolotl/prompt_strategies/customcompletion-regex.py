@@ -274,7 +274,7 @@ class CustomCompletionPromptTokenizingStrategy(PromptTokenizingStrategy):
 
         # Get entire tokenized text
         tokenized_text = self.tokenizer(
-            original_text,
+            text=original_text,
             truncation=False,
             padding=False,
             return_tensors=None,
