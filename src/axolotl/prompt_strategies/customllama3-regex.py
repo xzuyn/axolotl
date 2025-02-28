@@ -330,7 +330,7 @@ class CustomLLaMa3PromptTokenizingStrategy(PromptTokenizingStrategy):
             )
 
             # Strip unwanted BOS token
-            if prefix["input_ids"][0] == self.tokenizer.bos_token_id and (i != 0):
+            if self.tokenizer.bos_token_id and prefix["input_ids"][0] == self.tokenizer.bos_token_id and (i != 0):
                 prefix["input_ids"] = prefix["input_ids"][1:]
                 prefix["attention_mask"] = prefix["attention_mask"][1:]
 
@@ -359,7 +359,7 @@ class CustomLLaMa3PromptTokenizingStrategy(PromptTokenizingStrategy):
             )
 
             # Strip unwanted BOS token
-            if tokenized_text["input_ids"][0] == self.tokenizer.bos_token_id and (i != 0):
+            if self.tokenizer.bos_token_id and tokenized_text["input_ids"][0] == self.tokenizer.bos_token_id and (i != 0):
                 tokenized_text["input_ids"] = tokenized_text["input_ids"][1:]
                 tokenized_text["attention_mask"] = tokenized_text["attention_mask"][1:]
                 tokenized_text["labels"] = tokenized_text["labels"][1:]
