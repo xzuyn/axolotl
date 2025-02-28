@@ -340,6 +340,12 @@ class CustomLLaMa3PromptTokenizingStrategy(PromptTokenizingStrategy):
                 return_tensors=None,
             )
 
+            # Strip unwanted BOS token
+            if prefix["input_ids"][0] == self.tokenizer.bos_token_id and strip_bos:
+                prefix["input_ids"] = prefix["input_ids"][1:]
+                prefix["attention_mask"] = prefix["attention_mask"][1:]
+                prefix["labels"] = prefix["labels"][1:]
+
             # Get entire tokenized turn
             tokenized_text = self.tokenizer(
                 text=(
@@ -369,11 +375,7 @@ class CustomLLaMa3PromptTokenizingStrategy(PromptTokenizingStrategy):
                 tokenized_text["input_ids"] = tokenized_text["input_ids"][1:]
                 tokenized_text["attention_mask"] = tokenized_text["attention_mask"][1:]
                 tokenized_text["labels"] = tokenized_text["labels"][1:]
-            # Strip unwanted BOS token
-            if prefix["input_ids"][0] == self.tokenizer.bos_token_id and strip_bos:
-                prefix["input_ids"] = prefix["input_ids"][1:]
-                prefix["attention_mask"] = prefix["attention_mask"][1:]
-                prefix["labels"] = prefix["labels"][1:]
+
             # Add missing EOS token
             if tokenized_text["input_ids"][-1] != self.tokenizer.eos_token_id and end_of_text:
                 tokenized_text["input_ids"].append(self.tokenizer.eos_token_id)
