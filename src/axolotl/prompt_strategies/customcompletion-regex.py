@@ -233,7 +233,6 @@ COMPILED_REGEX_PATTERNS = [re.compile(pattern) for pattern in REGEX_PATTERNS]
 
 
 def mask_regex_attention(
-    self,
     original_text,
     original_input_ids,
     original_attention_mask,
@@ -241,7 +240,7 @@ def mask_regex_attention(
     compiled_regex_patterns
 ):
     # Make a copy of the original attention_mask.
-    new_attention_mask = original_attention_mask.copy()
+    new_attention_mask, new_labels = original_attention_mask.copy(), original_input_ids.copy()
 
     # For each regex pattern, find all its occurrences in the text.
     match_count = 0
@@ -253,9 +252,7 @@ def mask_regex_attention(
             # Check each token's character span; if it overlaps, mask it out.
             for i, (token_start, token_end) in enumerate(original_offset_mapping):
                 if token_start < end_index and token_end > found_index:
-                    new_attention_mask[i] = 0
-
-    new_labels = [label if mask == 1 else IGNORE_TOKEN_ID for label, mask in zip(original_input_ids, new_attention_mask)]
+                    new_attention_mask[i], new_labels[i] = 0, -100
 
     return original_input_ids, new_attention_mask, new_labels
 
@@ -296,7 +293,6 @@ class CustomCompletionPromptTokenizingStrategy(PromptTokenizingStrategy):
 
         # Mask out undesired tokens using regex patterns
         input_ids, attention_mask, labels = mask_regex_attention(
-            self=self,
             original_text=original_text,
             original_input_ids=tokenized_text["input_ids"],
             original_attention_mask=tokenized_text["attention_mask"],
