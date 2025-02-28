@@ -417,6 +417,7 @@ class CustomLLaMa3PromptTokenizingStrategy(PromptTokenizingStrategy):
         elif self.tokenizer.bos_token_id and input_ids[0] == self.tokenizer.bos_token_id:
             labels[0] = IGNORE_TOKEN_ID
             attention_mask[0] = 0
+
         # Add missing EOS token
         if input_ids[-1] != self.tokenizer.eos_token_id:
             input_ids.append(self.tokenizer.eos_token_id)
