@@ -288,11 +288,6 @@ class CustomCompletionPromptTokenizingStrategy(PromptTokenizingStrategy):
         elif self.tokenizer.bos_token_id and tokenized_text["input_ids"][0] == self.tokenizer.bos_token_id:
             tokenized_text["attention_mask"][0] = 0
 
-        # Fix missing EOS token
-        if tokenized_text["input_ids"][-1] != self.tokenizer.eos_token_id:
-            tokenized_text["input_ids"].append(self.tokenizer.eos_token_id)
-            tokenized_text["attention_mask"].append(1)
-
         # Mask out undesired tokens using regex patterns
         input_ids, attention_mask, labels = mask_regex_attention(
             original_text=original_text,
@@ -301,6 +296,12 @@ class CustomCompletionPromptTokenizingStrategy(PromptTokenizingStrategy):
             original_offset_mapping=tokenized_text["offset_mapping"],
             compiled_regex_patterns=COMPILED_REGEX_PATTERNS
         )
+
+        # Fix missing EOS token
+        if input_ids[-1] != self.tokenizer.eos_token_id:
+            input_ids.append(self.tokenizer.eos_token_id)
+            labels.append(self.tokenizer.eos_token_id)
+            attention_mask.append(1)
 
         return {
             "input_ids": input_ids,
