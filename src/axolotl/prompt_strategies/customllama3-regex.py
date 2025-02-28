@@ -233,15 +233,17 @@ COMPILED_REGEX_PATTERNS = [re.compile(pattern) for pattern in REGEX_PATTERNS]
 
 
 def mask_regex_attention(
-    self,
     original_text,
     original_input_ids,
     original_attention_mask,
     original_offset_mapping,
     compiled_regex_patterns
 ):
-    # Make a copy of the original attention_mask.
+    # Make a copy of the original attention_mask and labels
     new_attention_mask = original_attention_mask.copy()
+    new_labels = [
+        label if mask == 1 else IGNORE_TOKEN_ID for label, mask in zip(original_input_ids, original_attention_mask)
+    ]
 
     # For each regex pattern, find all its occurrences in the text.
     match_count = 0
@@ -250,12 +252,11 @@ def mask_regex_attention(
             match_count += 1
             found_index = match.start()
             end_index = match.end()
+
             # Check each token's character span; if it overlaps, mask it out.
             for i, (token_start, token_end) in enumerate(original_offset_mapping):
                 if token_start < end_index and token_end > found_index:
-                    new_attention_mask[i] = 0
-
-    new_labels = [label if mask == 1 else IGNORE_TOKEN_ID for label, mask in zip(original_input_ids, new_attention_mask)]
+                    new_attention_mask[i], new_labels[i] = 0, IGNORE_TOKEN_ID
 
     return original_input_ids, new_attention_mask, new_labels
 
@@ -359,8 +360,8 @@ class CustomLLaMa3PromptTokenizingStrategy(PromptTokenizingStrategy):
                 or sharegpt_from == "gpt-chat"
                 or sharegpt_from == "thought"
             ):
+                # Mask out undesired tokens using regex patterns
                 turn_input_ids, turn_attention_mask, turn_labels = mask_regex_attention(
-                    self=self,
                     original_text=ftfy.fix_text(sharegpt_value.strip()),
                     original_input_ids=res["input_ids"],
                     original_attention_mask=res["attention_mask"],
@@ -379,7 +380,6 @@ class CustomLLaMa3PromptTokenizingStrategy(PromptTokenizingStrategy):
             else:
                 # Mask out undesired tokens using regex patterns
                 turn_input_ids, turn_attention_mask, turn_labels = mask_regex_attention(
-                    self=self,
                     original_text=ftfy.fix_text(sharegpt_value.strip()),
                     original_input_ids=res["input_ids"],
                     original_attention_mask=res["attention_mask"],
@@ -398,21 +398,10 @@ class CustomLLaMa3PromptTokenizingStrategy(PromptTokenizingStrategy):
         }
 
 
-# TODO: Remove this as it doesn't get used
-class CustomLLaMa3Prompter:
-    """
-    Prompter for CustomLLaMa3.
-    """
-
-    def __init__(self, *args, **kwargs):
-        # Constructor does nothing
-        pass
-
-
 # Function to load the CustomLLaMa3PromptTokenizingStrategy
 def load(tokenizer, cfg):
     return CustomLLaMa3PromptTokenizingStrategy(
-        CustomLLaMa3Prompter(),  # TODO: Remove this as it doesn't get used
+        None,
         tokenizer,
         cfg.train_on_inputs,
         cfg.sequence_len
