@@ -227,7 +227,7 @@ REGEX_PATTERNS = [
     "(?i)(?:ethical|legal|policy) (?:concerns|considerations|implications|guidelines) prevent me from (?:assisting|providing help)",
     "(?i)Due to (?:one or more of )?(?:(?:ethical|legal|policy) (?:concerns|considerations|implications|guidelines))(?: (?:and|or) (?:(?:ethical|legal|policy) (?:concerns|considerations|implications|guidelines)))*,? I(?: cannot| can't| am unable| am not|'m unable)",
     "(?i)(?:violates|against) our policy",
-    "(?i)I (?:cannot|can't|am unable to) assist with"
+    "(?i)I (?:cannot|can't|am unable to) assist with",
 ]
 COMPILED_REGEX_PATTERNS = [re.compile(pattern) for pattern in REGEX_PATTERNS]
 
@@ -237,7 +237,7 @@ def mask_regex_attention(
     input_ids: List[int],
     attention_mask: List[int],
     offset_mapping: List[Tuple[int, int]],
-    compiled_regex_patterns: List[Pattern[str]]
+    compiled_regex_patterns: List[Pattern[str]],
 ) -> Tuple[List[int], List[int], List[int]]:
     """
     Masks tokens in the attention_mask and corresponding labels based on regex matches in the text.
@@ -295,7 +295,7 @@ class CustomCompletionPromptTokenizingStrategy(PromptTokenizingStrategy):
             truncation=False,
             padding=False,
             return_tensors=None,
-            return_offsets_mapping=True
+            return_offsets_mapping=True,
         )
 
         # Mask out undesired tokens using regex patterns
@@ -304,7 +304,7 @@ class CustomCompletionPromptTokenizingStrategy(PromptTokenizingStrategy):
             input_ids=tokenized_text["input_ids"],
             attention_mask=tokenized_text["attention_mask"],
             offset_mapping=tokenized_text["offset_mapping"],
-            compiled_regex_patterns=COMPILED_REGEX_PATTERNS
+            compiled_regex_patterns=COMPILED_REGEX_PATTERNS,
         )
 
         # Fix missing or unmasked BOS token
@@ -331,8 +331,4 @@ class CustomCompletionPromptTokenizingStrategy(PromptTokenizingStrategy):
 
 # Function to load the CustomCompletionPromptTokenizingStrategy
 def load(tokenizer, cfg, ds_cfg):
-    return CustomCompletionPromptTokenizingStrategy(
-        None,
-        tokenizer,
-        ds_cfg.field
-    )
+    return CustomCompletionPromptTokenizingStrategy(None, tokenizer, ds_cfg.field)
