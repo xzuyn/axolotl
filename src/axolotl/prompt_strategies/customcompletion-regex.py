@@ -155,7 +155,6 @@ REGEX_PATTERNS = [
     "(?i)like a predator stalking its prey",
     "(?i)orchestra",
     "(?i)depths",
-    "(?i)dance",
     "(?i)chuckles darkly",
     "(?i)could not help but",
     "(?i)a mix of",
@@ -205,6 +204,7 @@ REGEX_PATTERNS = [
     "(?i)thank you for (posting|reading|sharing)",
     "(?i)[!:\\.;?*]  ",
     "(?i)\\.{4,}",
+    "(?i)sly grin",
     # Toasty's Additions
     "(?i)(cant|can't|couldn't|couldnt) help but",
     "(?i)smirk(ed)",
@@ -295,8 +295,8 @@ class CustomCompletionPromptTokenizingStrategy(PromptTokenizingStrategy):
         # Fix missing or unmasked BOS token
         if self.tokenizer.bos_token_id and input_ids[0] != self.tokenizer.bos_token_id:
             input_ids.insert(0, self.tokenizer.bos_token_id)
-            labels.insert(0, IGNORE_TOKEN_ID)
             attention_mask.insert(0, 0)
+            labels.insert(0, IGNORE_TOKEN_ID)
         elif self.tokenizer.bos_token_id and input_ids[0] == self.tokenizer.bos_token_id:
             labels[0] = IGNORE_TOKEN_ID
             attention_mask[0] = 0
@@ -304,8 +304,8 @@ class CustomCompletionPromptTokenizingStrategy(PromptTokenizingStrategy):
         # Fix missing EOS token
         if input_ids[-1] != self.tokenizer.eos_token_id:
             input_ids.append(self.tokenizer.eos_token_id)
-            labels.append(self.tokenizer.eos_token_id)
             attention_mask.append(1)
+            labels.append(self.tokenizer.eos_token_id)
 
         return {
             "input_ids": input_ids,
