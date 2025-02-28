@@ -1,12 +1,11 @@
 """Module containing the CustomLLaMa3PromptTokenizingStrategy class"""
 
 # Import necessary modules and functions
-import copy
-import logging
-from collections import defaultdict
-from typing import Generator, List, Tuple
 import re
 import ftfy
+import copy
+import logging
+from typing import List, Tuple, Pattern, Dict, Union
 
 # Import from axolotl package
 from axolotl.prompt_tokenizers import PromptTokenizingStrategy
@@ -155,7 +154,6 @@ REGEX_PATTERNS = [
     "(?i)like a predator stalking its prey",
     "(?i)orchestra",
     "(?i)depths",
-    "(?i)dance",
     "(?i)chuckles darkly",
     "(?i)could not help but",
     "(?i)a mix of",
@@ -233,32 +231,48 @@ COMPILED_REGEX_PATTERNS = [re.compile(pattern) for pattern in REGEX_PATTERNS]
 
 
 def mask_regex_attention(
-    original_text,
-    original_input_ids,
-    original_attention_mask,
-    original_offset_mapping,
-    compiled_regex_patterns
-):
-    # Make a copy of the original attention_mask and labels
-    new_attention_mask = original_attention_mask.copy()
-    new_labels = [
-        label if mask == 1
-        else IGNORE_TOKEN_ID
-        for label, mask in zip(original_input_ids, original_attention_mask)
-    ]
+    text: str,
+    input_ids: List[int],
+    attention_mask: List[int],
+    offset_mapping: List[Tuple[int, int]],
+    compiled_regex_patterns: List[Pattern[str]]
+) -> Dict[str, Union[List[int], List[Tuple[int, int]]]]:
+    """
+    Masks tokens in the attention_mask and corresponding labels based on regex matches in the text.
+
+    Parameters:
+        text (str): The original text.
+        input_ids (List[int]): The list of token IDs.
+        attention_mask (List[int]): Binary mask indicating which tokens are valid.
+        offset_mapping (List[Tuple[int, int]]): List of (start, end) indices for each token.
+        compiled_regex_patterns (List[Pattern[str]]): List of precompiled regex patterns.
+
+    Returns:
+        Dict[str, Union[List[int], List[Tuple[int, int]]]]: A dictionary containing:
+            - "input_ids" (List[int]): Unmodified token IDs.
+            - "attention_mask" (List[int]): Modified attention mask with masked tokens set to 0.
+            - "offset_mapping" (List[Tuple[int, int]]): Unmodified list of (start, end) indices for each token.
+            - "labels" (List[int]): Labels with masked tokens set to -100.
+    """
+
+    # Validate input lengths
+    if not (len(input_ids) == len(attention_mask) == len(offset_mapping)):
+        raise ValueError("Length of input_ids, attention_mask, and offset_mapping must be the same.")
+
+    labels = [label if mask == 1 else IGNORE_TOKEN_ID for label, mask in zip(input_ids, attention_mask)]
 
     # For each regex pattern, find all its occurrences in the text.
     for pattern in compiled_regex_patterns:
-        for match in pattern.finditer(original_text):
+        for match in pattern.finditer(text):
             found_index = match.start()
             end_index = match.end()
 
             # Check each token's character span; if it overlaps, mask it out.
-            for i, (token_start, token_end) in enumerate(original_offset_mapping):
+            for i, (token_start, token_end) in enumerate(offset_mapping):
                 if token_start < end_index and token_end > found_index:
-                    new_attention_mask[i], new_labels[i] = 0, IGNORE_TOKEN_ID
+                    attention_mask[i], labels[i] = 0, IGNORE_TOKEN_ID
 
-    return original_input_ids, new_attention_mask, new_labels
+    return {"input_ids": input_ids, "attention_mask": attention_mask, "offset_mapping": offset_mapping, "labels": labels}
 
 
 class CustomLLaMa3PromptTokenizingStrategy(PromptTokenizingStrategy):
@@ -325,12 +339,9 @@ class CustomLLaMa3PromptTokenizingStrategy(PromptTokenizingStrategy):
                 padding=False,
                 return_tensors=None,
             )
-            if prefix["input_ids"][0] == self.tokenizer.bos_token_id and strip_bos:
-                prefix["input_ids"] = prefix["input_ids"][1:]
-                prefix["attention_mask"] = prefix["attention_mask"][1:]
 
             # Get entire tokenized turn
-            res = self.tokenizer(
+            tokenized_text = self.tokenizer(
                 text=(
                     f"<|start_header_id|>{role_name}<|end_header_id|>\n\n"
                     f"{ftfy.fix_text(sharegpt_value.strip())}<|eot_id|>"
@@ -340,13 +351,31 @@ class CustomLLaMa3PromptTokenizingStrategy(PromptTokenizingStrategy):
                 return_tensors=None,
                 return_offsets_mapping=True
             )
-            if res["input_ids"][-1] != self.tokenizer.eos_token_id and end_of_text:
-                res["input_ids"].append(self.tokenizer.eos_token_id)
-                res["attention_mask"].append(1)
-            if res["input_ids"][0] == self.tokenizer.bos_token_id and strip_bos:
-                res["input_ids"] = res["input_ids"][1:]
-                res["attention_mask"] = res["attention_mask"][1:]
-                res["offset_mapping"] = res["offset_mapping"][1:]
+
+            # Mask out undesired tokens using regex patterns
+            tokenized_text = mask_regex_attention(
+                text=(
+                    f"<|start_header_id|>{role_name}<|end_header_id|>\n\n"
+                    f"{ftfy.fix_text(sharegpt_value.strip())}<|eot_id|>"
+                ),
+                input_ids=tokenized_text["input_ids"],
+                attention_mask=tokenized_text["attention_mask"],
+                offset_mapping=tokenized_text["offset_mapping"],
+                compiled_regex_patterns=COMPILED_REGEX_PATTERNS
+            )
+
+            # Fix any problem BOS or EOS tokens
+            if prefix["input_ids"][0] == self.tokenizer.bos_token_id and strip_bos:
+                prefix["input_ids"] = prefix["input_ids"][1:]
+                prefix["attention_mask"] = prefix["attention_mask"][1:]
+            if tokenized_text["input_ids"][-1] != self.tokenizer.eos_token_id and end_of_text:
+                tokenized_text["input_ids"].append(self.tokenizer.eos_token_id)
+                tokenized_text["attention_mask"].append(1)
+                tokenized_text["labels"].append(self.tokenizer.eos_token_id)
+            if tokenized_text["input_ids"][0] == self.tokenizer.bos_token_id and strip_bos:
+                tokenized_text["input_ids"] = tokenized_text["input_ids"][1:]
+                tokenized_text["attention_mask"] = tokenized_text["attention_mask"][1:]
+                tokenized_text["labels"] = tokenized_text["labels"][1:]
 
             # Handle masked user turn
             if self.train_on_inputs is False and (
@@ -354,51 +383,26 @@ class CustomLLaMa3PromptTokenizingStrategy(PromptTokenizingStrategy):
                 or sharegpt_from == "human"
                 or sharegpt_from == "human-chat"
             ):
-                turn_input_ids = res["input_ids"]
-                turn_attention_mask = [0] * len(res["attention_mask"])
-                turn_labels = [IGNORE_TOKEN_ID] * len(res["input_ids"])
+                tokenized_text["attention_mask"] = [0] * len(tokenized_text["attention_mask"])
+                tokenized_text["labels"] = [IGNORE_TOKEN_ID] * len(tokenized_text["input_ids"])
             # Handle partially masked model turn
             elif self.train_on_inputs is False and (
                 sharegpt_from == "gpt"
                 or sharegpt_from == "gpt-chat"
                 or sharegpt_from == "thought"
             ):
-                # Mask out undesired tokens using regex patterns
-                turn_input_ids, turn_attention_mask, turn_labels = mask_regex_attention(
-                    original_text=(
-                        f"<|start_header_id|>{role_name}<|end_header_id|>\n\n"
-                        f"{ftfy.fix_text(sharegpt_value.strip())}<|eot_id|>"
-                    ),
-                    original_input_ids=res["input_ids"],
-                    original_attention_mask=res["attention_mask"],
-                    original_offset_mapping=res["offset_mapping"],
-                    compiled_regex_patterns=COMPILED_REGEX_PATTERNS
-                )
-                turn_attention_mask = (
+                tokenized_text["attention_mask"] = (
                     [0] * len(prefix["attention_mask"])  # Mask the prefix
-                    + turn_attention_mask[len(prefix["attention_mask"]):]
+                    + tokenized_text["attention_mask"][len(prefix["attention_mask"]):]
                 )
-                turn_labels = (
+                tokenized_text["labels"] = (
                     [IGNORE_TOKEN_ID] * len(prefix["input_ids"])  # Mask the prefix
-                    + [label if mask == 1 else IGNORE_TOKEN_ID for label, mask in zip(turn_input_ids, turn_attention_mask)][len(prefix["input_ids"]):]
-                )
-            # Handle unmasked turn
-            else:
-                # Mask out undesired tokens using regex patterns
-                turn_input_ids, turn_attention_mask, turn_labels = mask_regex_attention(
-                    original_text=(
-                        f"<|start_header_id|>{role_name}<|end_header_id|>\n\n"
-                        f"{ftfy.fix_text(sharegpt_value.strip())}<|eot_id|>"
-                    ),
-                    original_input_ids=res["input_ids"],
-                    original_attention_mask=res["attention_mask"],
-                    original_offset_mapping=res["offset_mapping"],
-                    compiled_regex_patterns=COMPILED_REGEX_PATTERNS
+                    + tokenized_text["labels"][len(prefix["input_ids"]):]
                 )
 
-            input_ids += turn_input_ids
-            attention_mask += turn_attention_mask
-            labels += turn_labels
+            input_ids += tokenized_text["input_ids"]
+            attention_mask += tokenized_text["attention_mask"]
+            labels += tokenized_text["labels"]
 
         # Fix missing or unmasked BOS token
         if self.tokenizer.bos_token_id and input_ids[0] != self.tokenizer.bos_token_id:
