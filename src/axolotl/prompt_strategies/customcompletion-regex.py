@@ -9,11 +9,8 @@ import re
 import ftfy
 
 # Import from axolotl package
-from axolotl.prompt_tokenizers import (
-    PromptTokenizingStrategy,
-    parse_tokenized_to_result,
-    tokenize_prompt_default,
-)
+from axolotl.prompt_tokenizers import PromptTokenizingStrategy
+
 
 # Set up logging
 LOG = logging.getLogger("axolotl")
@@ -235,31 +232,32 @@ REGEX_PATTERNS = [
 COMPILED_REGEX_PATTERNS = [re.compile(pattern) for pattern in REGEX_PATTERNS]
 
 
-# TODO: Simplify this?
-def mask_regex_attention(self, input_data, compiled_regex_patterns):
-    # Decode the input_ids back to text.
-    input_text = self.tokenizer.decode(input_data["input_ids"])
-
-    # Re-tokenize the text with offset mapping using the same options as the original tokenization.
-    encoded = self.tokenizer(input_text, return_offsets_mapping=True, add_special_tokens=False)
-    offset_mapping = encoded["offset_mapping"]
-
+def mask_regex_attention(
+    self,
+    original_text,
+    original_input_ids,
+    original_attention_mask,
+    original_offset_mapping,
+    compiled_regex_patterns
+):
     # Make a copy of the original attention_mask.
-    new_attention_mask = input_data["attention_mask"].copy()
+    new_attention_mask = original_attention_mask.copy()
 
     # For each regex pattern, find all its occurrences in the text.
     match_count = 0
     for pattern in compiled_regex_patterns:
-        for match in pattern.finditer(input_text):
+        for match in pattern.finditer(original_text):
             match_count += 1
             found_index = match.start()
             end_index = match.end()
             # Check each token's character span; if it overlaps, mask it out.
-            for i, (token_start, token_end) in enumerate(offset_mapping):
+            for i, (token_start, token_end) in enumerate(original_offset_mapping):
                 if token_start < end_index and token_end > found_index:
                     new_attention_mask[i] = 0
 
-    return new_attention_mask, match_count
+    new_labels = [label if mask == 1 else IGNORE_TOKEN_ID for label, mask in zip(original_input_ids, new_attention_mask)]
+
+    return original_input_ids, new_attention_mask, new_labels
 
 
 class CustomCompletionPromptTokenizingStrategy(PromptTokenizingStrategy):
@@ -273,35 +271,38 @@ class CustomCompletionPromptTokenizingStrategy(PromptTokenizingStrategy):
         self.field = "text" if not field else field
 
     def tokenize_prompt(self, prompt):
-        # Tokenize the prompt based on its conversations
-        result, current_len = tokenize_prompt_default()
+        original_text = ftfy.fix_text(prompt[self.field].strip())
 
         # Get entire tokenized text
-        res = self.tokenizer(
-            ftfy.fix_text(prompt[self.field].strip()),
+        tokenized_text = self.tokenizer(
+            original_text,
+            add_special_tokens=True,
             truncation=False,
             padding=False,
             return_tensors=None,
+            return_offsets_mapping=True
         )
-        if res["input_ids"][-1] != self.tokenizer.eos_token_id:
-            res["input_ids"].append(self.tokenizer.eos_token_id)
-            res["attention_mask"].append(1)
+
+        # Fix missing EOS token
+        if tokenized_text["input_ids"][-1] != self.tokenizer.eos_token_id:
+            tokenized_text["input_ids"].append(self.tokenizer.eos_token_id)
+            tokenized_text["attention_mask"].append(1)
 
         # Mask out undesired tokens using regex patterns
-        res["attention_mask"], match_count = mask_regex_attention(self, res, COMPILED_REGEX_PATTERNS)
-
-        labels = [label if mask == 1 else IGNORE_TOKEN_ID for label, mask in zip(res["input_ids"], res["attention_mask"])]
-
-        # Parse tokenized result and update current length
-        result, current_len = parse_tokenized_to_result(
-            result,
-            current_len,
-            res,
-            labels,
-            pad_token_id=self.tokenizer.pad_token_id,
+        input_ids, attention_mask, labels = mask_regex_attention(
+            self=self,
+            original_text=original_text,
+            original_input_ids=tokenized_text["input_ids"],
+            original_attention_mask=tokenized_text["attention_mask"],
+            original_offset_mapping=tokenized_text["offset_mapping"],
+            compiled_regex_patterns=COMPILED_REGEX_PATTERNS
         )
 
-        return result
+        return {
+            "input_ids": input_ids,
+            "attention_mask": attention_mask,
+            "labels": labels,
+        }
 
 
 # TODO: Remove this as it doesn't get used
