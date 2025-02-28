@@ -233,32 +233,30 @@ COMPILED_REGEX_PATTERNS = [re.compile(pattern) for pattern in REGEX_PATTERNS]
 
 
 def mask_regex_attention(
-    original_text,
-    original_input_ids,
-    original_attention_mask,
-    original_offset_mapping,
+    text,
+    input_ids,
+    attention_mask,
+    offset_mapping,
     compiled_regex_patterns
 ):
-    # Make a copy of the original attention_mask and labels
-    new_attention_mask = original_attention_mask.copy()
-    new_labels = [
+    labels = [
         label if mask == 1
         else IGNORE_TOKEN_ID
-        for label, mask in zip(original_input_ids, original_attention_mask)
+        for label, mask in zip(input_ids, attention_mask)
     ]
 
     # For each regex pattern, find all its occurrences in the text.
     for pattern in compiled_regex_patterns:
-        for match in pattern.finditer(original_text):
+        for match in pattern.finditer(text):
             found_index = match.start()
             end_index = match.end()
 
             # Check each token's character span; if it overlaps, mask it out.
-            for i, (token_start, token_end) in enumerate(original_offset_mapping):
+            for i, (token_start, token_end) in enumerate(offset_mapping):
                 if token_start < end_index and token_end > found_index:
-                    new_attention_mask[i], new_labels[i] = 0, IGNORE_TOKEN_ID
+                    attention_mask[i], labels[i] = 0, IGNORE_TOKEN_ID
 
-    return original_input_ids, new_attention_mask, new_labels
+    return input_ids, attention_mask, labels
 
 
 class CustomCompletionPromptTokenizingStrategy(PromptTokenizingStrategy):
@@ -285,10 +283,10 @@ class CustomCompletionPromptTokenizingStrategy(PromptTokenizingStrategy):
 
         # Mask out undesired tokens using regex patterns
         input_ids, attention_mask, labels = mask_regex_attention(
-            original_text=original_text,
-            original_input_ids=tokenized_text["input_ids"],
-            original_attention_mask=tokenized_text["attention_mask"],
-            original_offset_mapping=tokenized_text["offset_mapping"],
+            text=original_text,
+            input_ids=tokenized_text["input_ids"],
+            attention_mask=tokenized_text["attention_mask"],
+            offset_mapping=tokenized_text["offset_mapping"],
             compiled_regex_patterns=COMPILED_REGEX_PATTERNS
         )
 
