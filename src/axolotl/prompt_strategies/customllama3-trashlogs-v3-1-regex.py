@@ -325,9 +325,7 @@ class CustomLLaMa3TrashLogsV3PromptTokenizingStrategy(PromptTokenizingStrategy):
 
             # Get tokens which will be masked out if using train_on_inputs: false
             prefix = self.tokenizer(
-                (
-                    f"<|start_header_id|>{ftfy.fix_text(turn_from)}<|end_header_id|>\n\n"
-                ),
+                text=f"<|start_header_id|>{ftfy.fix_text(turn_from)}<|end_header_id|>\n\n",
                 truncation=False,
                 padding=False,
                 return_tensors=None,
@@ -338,7 +336,7 @@ class CustomLLaMa3TrashLogsV3PromptTokenizingStrategy(PromptTokenizingStrategy):
 
             # Get entire tokenized turn
             res = self.tokenizer(
-                (
+                text=(
                     f"<|start_header_id|>{ftfy.fix_text(turn_from)}<|end_header_id|>\n\n"
                     f"{ftfy.fix_text(turn_value.strip())}<|eot_id|>"
                 ),
@@ -369,7 +367,10 @@ class CustomLLaMa3TrashLogsV3PromptTokenizingStrategy(PromptTokenizingStrategy):
                 turn_labels = [IGNORE_TOKEN_ID] * len(res["input_ids"])
             else:
                 turn_input_ids, turn_attention_mask, turn_labels = mask_regex_attention(
-                    original_text=ftfy.fix_text(turn_value.strip()),
+                    original_text=(
+                        f"<|start_header_id|>{ftfy.fix_text(turn_from)}<|end_header_id|>\n\n"
+                        f"{ftfy.fix_text(turn_value.strip())}<|eot_id|>"
+                    ),
                     original_input_ids=res["input_ids"],
                     original_attention_mask=res["attention_mask"],
                     original_offset_mapping=res["offset_mapping"],
