@@ -9,11 +9,7 @@ from typing import Generator, List, Tuple
 import ftfy
 
 # Import from axolotl package
-from axolotl.prompt_tokenizers import (
-    PromptTokenizingStrategy,
-    parse_tokenized_to_result,
-    tokenize_prompt_default,
-)
+from axolotl.prompt_tokenizers import PromptTokenizingStrategy
 
 
 # Set up logging
@@ -79,7 +75,7 @@ REGEX_PATTERNS = [
     "(?i)whispering words of passion",
     "(?i)soft and gentle",
     "(?i)dance of pleasure",
-    "(?i)(your|his|her|their) sex",
+    "(?i)(your|his|her|their) sex\\b",
     "(?i)sent (shockwaves|shock waves)",
     "(?i)in a rhythm",
     "(?i)exhausted and spent",
@@ -130,7 +126,6 @@ REGEX_PATTERNS = [
     "(?i)conspiratorial whisper(|s)",
     "(?i)whisper(|ing) conspiratorially",
     "(?i)eyes (sparkling|twinkling) with mischief",
-    "(?i)couldn(|')t help but",
     "(?i)racing with anticipation",
     "(?i)leaves little to the imagination",
     "(?i)waggles her eyebrows",
@@ -210,11 +205,17 @@ REGEX_PATTERNS = [
     "(?i)thank you for (posting|reading|sharing)",
     "(?i)[!:\\.;?*]  ",
     "(?i)\\.{4,}",
-    # URLS
-    "(?i)\\b((?:https?:(?:/{1,3}|[a-z0-9%])|[a-z0-9.\\-]+[.](?:com|net|org|edu|gov|mil|aero|asia|biz|cat|coop|info|int|jobs|mobi|museum|name|post|pro|tel|travel|xxx|ac|ad|ae|af|ag|ai|al|am|an|ao|aq|ar|as|at|au|aw|ax|az|ba|bb|bd|be|bf|bg|bh|bi|bj|bm|bn|bo|br|bs|bt|bv|bw|by|bz|ca|cc|cd|cf|cg|ch|ci|ck|cl|cm|cn|co|cr|cs|cu|cv|cx|cy|cz|dd|de|dj|dk|dm|do|dz|ec|ee|eg|eh|er|es|et|eu|fi|fj|fk|fm|fo|fr|ga|gb|gd|ge|gf|gg|gh|gi|gl|gm|gn|gp|gq|gr|gs|gt|gu|gw|gy|hk|hm|hn|hr|ht|hu|id|ie|il|im|in|io|iq|ir|is|it|je|jm|jo|jp|ke|kg|kh|ki|km|kn|kp|kr|kw|ky|kz|la|lb|lc|li|lk|lr|ls|lt|lu|lv|ly|ma|mc|md|me|mg|mh|mk|ml|mm|mn|mo|mp|mq|mr|ms|mt|mu|mv|mw|mx|my|mz|na|nc|ne|nf|ng|ni|nl|no|np|nr|nu|nz|om|pa|pe|pf|pg|ph|pk|pl|pm|pn|pr|ps|pt|pw|py|qa|re|ro|rs|ru|rw|sa|sb|sc|sd|se|sg|sh|si|sj|Ja|sk|sl|sm|sn|so|sr|ss|st|su|sv|sx|sy|sz|tc|td|tf|tg|th|tj|tk|tl|tm|tn|to|tp|tr|tt|tv|tw|tz|ua|ug|uk|us|uy|uz|va|vc|ve|vg|vi|vn|vu|wf|ws|ye|yt|yu|za|zm|zw)/)(?:[^\\s()<>{}\\[\\]]+|\\([^\\s()]*?\\([^\\s()]+\\)[^\\s()]*?\\)|\\([^\\s]+?\\))+(?:\\([^\\s()]*?\\([^\\s()]+\\)[^\\s()]*?\\)|\\([^\\s]+?\\)|[^\\s`!()\\[\\]{};:'\".,<>?«»“”‘’])|(?:(?<!@)[a-z0-9]+(?:[.\\-][a-z0-9]+)*[.](?:com|net|org|edu|gov|mil|aero|asia|biz|cat|coop|info|int|jobs|mobi|museum|name|post|pro|tel|travel|xxx|ac|ad|ae|af|ag|ai|al|am|an|ao|aq|ar|as|at|au|aw|ax|az|ba|bb|bd|be|bf|bg|bh|bi|bj|bm|bn|bo|br|bs|bt|bv|bw|by|bz|ca|cc|cd|cf|cg|ch|ci|ck|cl|cm|cn|co|cr|cs|cu|cv|cx|cy|cz|dd|de|dj|dk|dm|do|dz|ec|ee|eg|eh|er|es|et|eu|fi|fj|fk|fm|fo|fr|ga|gb|gd|ge|gf|gg|gh|gi|gl|gm|gn|gp|gq|gr|gs|gt|gu|gw|gy|hk|hm|hn|hr|ht|hu|id|ie|il|im|in|io|iq|ir|is|it|je|jm|jo|jp|ke|kg|kh|ki|km|kn|kp|kr|kw|ky|kz|la|lb|lc|li|lk|lr|ls|lt|lu|lv|ly|ma|mc|md|me|mg|mh|mk|ml|mm|mn|mo|mp|mq|mr|ms|mt|mu|mv|mw|mx|my|mz|na|nc|ne|nf|ng|ni|nl|no|np|nr|nu|nz|om|pa|pe|pf|pg|ph|pk|pl|pm|pn|pr|ps|pt|pw|py|qa|re|ro|rs|ru|rw|sa|sb|sc|sd|se|sg|sh|si|sj|Ja|sk|sl|sm|sn|so|sr|ss|st|su|sv|sx|sy|sz|tc|td|tf|tg|th|tj|tk|tl|tm|tn|to|tp|tr|tt|tv|tw|tz|ua|ug|uk|us|uy|uz|va|vc|ve|vg|vi|vn|vu|wf|ws|ye|yt|yu|za|zm|zw)\\b/?(?!@)))",
+    # Toasty's Additions
+    "(?i)(cant|can't|couldn't|couldnt) help but",
+    "(?i)smirk(ed)",
+    "(?i)gasp(ed)",
+    "(?i)hitch(ed)",
+    "(?i)stark contrast",
+    # URLS - https://gist.github.com/gruber/8891611#file-liberal-regex-pattern-for-web-urls-L8
+    "(?i)\\b((?:https?:(?:/{1,3}|[a-z0-9%])|[a-z0-9\\.\\-]+[\\.](?:com|net|org|edu|gov|mil|aero|asia|biz|cat|coop|info|int|jobs|mobi|museum|name|post|pro|tel|travel|xxx|ac|ad|ae|af|ag|ai|al|am|an|ao|aq|ar|as|at|au|aw|ax|az|ba|bb|bd|be|bf|bg|bh|bi|bj|bm|bn|bo|br|bs|bt|bv|bw|by|bz|ca|cc|cd|cf|cg|ch|ci|ck|cl|cm|cn|co|cr|cs|cu|cv|cx|cy|cz|dd|de|dj|dk|dm|do|dz|ec|ee|eg|eh|er|es|et|eu|fi|fj|fk|fm|fo|fr|ga|gb|gd|ge|gf|gg|gh|gi|gl|gm|gn|gp|gq|gr|gs|gt|gu|gw|gy|hk|hm|hn|hr|ht|hu|id|ie|il|im|in|io|iq|ir|is|it|je|jm|jo|jp|ke|kg|kh|ki|km|kn|kp|kr|kw|ky|kz|la|lb|lc|li|lk|lr|ls|lt|lu|lv|ly|ma|mc|md|me|mg|mh|mk|ml|mm|mn|mo|mp|mq|mr|ms|mt|mu|mv|mw|mx|my|mz|na|nc|ne|nf|ng|ni|nl|no|np|nr|nu|nz|om|pa|pe|pf|pg|ph|pk|pl|pm|pn|pr|ps|pt|pw|py|qa|re|ro|rs|ru|rw|sa|sb|sc|sd|se|sg|sh|si|sj|Ja|sk|sl|sm|sn|so|sr|ss|st|su|sv|sx|sy|sz|tc|td|tf|tg|th|tj|tk|tl|tm|tn|to|tp|tr|tt|tv|tw|tz|ua|ug|uk|us|uy|uz|va|vc|ve|vg|vi|vn|vu|wf|ws|ye|yt|yu|za|zm|zw)/)(?:[^\\s()<>{}\\[\\]]+|\\([^\\s()]*?\\([^\\s()]+\\)[^\\s()]*?\\)|\\([^\\s]+?\\))+(?:\\([^\\s()]*?\\([^\\s()]+\\)[^\\s()]*?\\)|\\([^\\s]+?\\)|[^\\s`!()\\[\\]{};:'\"\\.,<>?«»“”‘’])|(?:(?<!@)[a-z0-9]+(?:[\\.\\-][a-z0-9]+)*[\\.](?:com|net|org|edu|gov|mil|aero|asia|biz|cat|coop|info|int|jobs|mobi|museum|name|post|pro|tel|travel|xxx|ac|ad|ae|af|ag|ai|al|am|an|ao|aq|ar|as|at|au|aw|ax|az|ba|bb|bd|be|bf|bg|bh|bi|bj|bm|bn|bo|br|bs|bt|bv|bw|by|bz|ca|cc|cd|cf|cg|ch|ci|ck|cl|cm|cn|co|cr|cs|cu|cv|cx|cy|cz|dd|de|dj|dk|dm|do|dz|ec|ee|eg|eh|er|es|et|eu|fi|fj|fk|fm|fo|fr|ga|gb|gd|ge|gf|gg|gh|gi|gl|gm|gn|gp|gq|gr|gs|gt|gu|gw|gy|hk|hm|hn|hr|ht|hu|id|ie|il|im|in|io|iq|ir|is|it|je|jm|jo|jp|ke|kg|kh|ki|km|kn|kp|kr|kw|ky|kz|la|lb|lc|li|lk|lr|ls|lt|lu|lv|ly|ma|mc|md|me|mg|mh|mk|ml|mm|mn|mo|mp|mq|mr|ms|mt|mu|mv|mw|mx|my|mz|na|nc|ne|nf|ng|ni|nl|no|np|nr|nu|nz|om|pa|pe|pf|pg|ph|pk|pl|pm|pn|pr|ps|pt|pw|py|qa|re|ro|rs|ru|rw|sa|sb|sc|sd|se|sg|sh|si|sj|Ja|sk|sl|sm|sn|so|sr|ss|st|su|sv|sx|sy|sz|tc|td|tf|tg|th|tj|tk|tl|tm|tn|to|tp|tr|tt|tv|tw|tz|ua|ug|uk|us|uy|uz|va|vc|ve|vg|vi|vn|vu|wf|ws|ye|yt|yu|za|zm|zw)\\b/?(?!@)))",
     # Thinking test
     "(?i)<(think|thinking|thought|thoughts)>",
-    # https://github.com/meta-llama/PurpleLlama/commit/4b807228b6803ea5b8eb065179f8e90747512018
+    # Refusals - https://github.com/meta-llama/PurpleLlama/commit/4b807228b6803ea5b8eb065179f8e90747512018
     "(?i)I (?:do not|don’t|don't) (?:have the ability|have access|understand|support)",
     "(?i)I (?:cannot|can’t|can't|can not|won't|woun’t|will not|am not able to|am unable to) (?:access|help(?: you)? with|provide|create|advice|generate|assist|fulfill your request|replace)",
     "(?i)(?:I am|I'm) sorry(?:,| ) (?:but I|but I'm)?",
@@ -231,28 +232,31 @@ REGEX_PATTERNS = [
 COMPILED_REGEX_PATTERNS = [re.compile(pattern) for pattern in REGEX_PATTERNS]
 
 
-def mask_regex_attention(self, input_data, compiled_regex_patterns):
-    # Decode the input_ids back to text.
-    input_text = self.tokenizer.decode(input_data["input_ids"])
-
-    # Re-tokenize the text with offset mapping using the same options as the original tokenization.
-    encoded = self.tokenizer(input_text, return_offsets_mapping=True, add_special_tokens=False)
-    offset_mapping = encoded["offset_mapping"]
-
-    # Make a copy of the original attention_mask.
-    new_attention_mask = input_data["attention_mask"].copy()
+def mask_regex_attention(
+    original_text,
+    original_input_ids,
+    original_attention_mask,
+    original_offset_mapping,
+    compiled_regex_patterns
+):
+    # Make a copy of the original attention_mask and labels
+    new_attention_mask = original_attention_mask.copy()
+    new_labels = [
+        label if mask == 1 else IGNORE_TOKEN_ID for label, mask in zip(original_input_ids, original_attention_mask)
+    ]
 
     # For each regex pattern, find all its occurrences in the text.
     for pattern in compiled_regex_patterns:
-        for match in pattern.finditer(input_text):
+        for match in pattern.finditer(original_text):
             found_index = match.start()
             end_index = match.end()
-            # Check each token's character span; if it overlaps, mask it out.
-            for i, (token_start, token_end) in enumerate(offset_mapping):
-                if token_start < end_index and token_end > found_index:
-                    new_attention_mask[i] = 0
 
-    return new_attention_mask
+            # Check each token's character span; if it overlaps, mask it out.
+            for i, (token_start, token_end) in enumerate(original_offset_mapping):
+                if token_start < end_index and token_end > found_index:
+                    new_attention_mask[i], new_labels[i] = 0, IGNORE_TOKEN_ID
+
+    return original_input_ids, new_attention_mask, new_labels
 
 
 class CustomLLaMa3PromptTokenizingStrategy(PromptTokenizingStrategy):
@@ -265,9 +269,6 @@ class CustomLLaMa3PromptTokenizingStrategy(PromptTokenizingStrategy):
         super().__init__(prompter, tokenizer, *args, **kwargs)
 
     def tokenize_prompt(self, prompt):
-        # Tokenize the prompt based on its conversations
-        result, current_len = tokenize_prompt_default()
-
         # Sometimes it gets named 'conversations' and other times 'conversation'
         if "conversations" in prompt:
             conversation_name = "conversations"
@@ -279,6 +280,7 @@ class CustomLLaMa3PromptTokenizingStrategy(PromptTokenizingStrategy):
 
         # Iterate over each conversation turn in the prompt
         num_turns = len(prompt[conversation_name])
+        input_ids, attention_mask, labels = [], [], []
         for i, turn in enumerate(prompt[conversation_name]):
             # Strip BOS token if it's not the first turn
             if i == 0:
@@ -344,54 +346,58 @@ class CustomLLaMa3PromptTokenizingStrategy(PromptTokenizingStrategy):
                 or sharegpt_from == "human"
                 or sharegpt_from == "human-chat"
             ):
-                labels = [IGNORE_TOKEN_ID] * len(res["input_ids"])
+                turn_input_ids = res["input_ids"]
+                turn_attention_mask = [0] * len(res["attention_mask"])
+                turn_labels = [IGNORE_TOKEN_ID] * len(res["input_ids"])
             # Handle partially masked model turn
             elif self.train_on_inputs is False and (
                 sharegpt_from == "gpt"
                 or sharegpt_from == "gpt-chat"
                 or sharegpt_from == "thought"
             ):
-                res["attention_mask"] = mask_regex_attention(self, res, COMPILED_REGEX_PATTERNS)
-                modified_label = [
-                    label if mask == 1
-                    else IGNORE_TOKEN_ID
-                    for label, mask in zip(res["input_ids"], res["attention_mask"])
-                ]
-                labels = (
+                # Mask out undesired tokens using regex patterns
+                turn_input_ids, turn_attention_mask, turn_labels = mask_regex_attention(
+                    original_text=ftfy.fix_text(sharegpt_value.strip()),
+                    original_input_ids=res["input_ids"],
+                    original_attention_mask=res["attention_mask"],
+                    original_offset_mapping=res["offset_mapping"],
+                    compiled_regex_patterns=COMPILED_REGEX_PATTERNS
+                )
+                turn_attention_mask = (
+                    [0] * len(prefix["attention_mask"])  # Mask the prefix
+                    + turn_attention_mask[len(prefix["attention_mask"]):]
+                )
+                turn_labels = (
                     [IGNORE_TOKEN_ID] * len(prefix["input_ids"])  # Mask the prefix
-                    + modified_label[len(prefix["input_ids"]):]
+                    + [label if mask == 1 else IGNORE_TOKEN_ID for label, mask in
+                       zip(turn_input_ids, turn_attention_mask)][len(prefix["input_ids"]):]
                 )
             # Handle unmasked turn
             else:
-                labels = res["input_ids"]
+                # Mask out undesired tokens using regex patterns
+                turn_input_ids, turn_attention_mask, turn_labels = mask_regex_attention(
+                    original_text=ftfy.fix_text(sharegpt_value.strip()),
+                    original_input_ids=res["input_ids"],
+                    original_attention_mask=res["attention_mask"],
+                    original_offset_mapping=res["offset_mapping"],
+                    compiled_regex_patterns=COMPILED_REGEX_PATTERNS
+                )
 
-            # Parse tokenized result and update current length
-            result, current_len = parse_tokenized_to_result(
-                result,
-                current_len,
-                res,
-                labels,
-                pad_token_id=self.tokenizer.pad_token_id,
-            )
+            input_ids += turn_input_ids
+            attention_mask += turn_attention_mask
+            labels += turn_labels
 
-        return result
-
-
-# TODO: Remove this as it doesn't get used
-class CustomLLaMa3Prompter:
-    """
-    Prompter for CustomLLaMa3.
-    """
-
-    def __init__(self, *args, **kwargs):
-        # Constructor does nothing
-        pass
+        return {
+            "input_ids": input_ids,
+            "attention_mask": attention_mask,
+            "labels": labels,
+        }
 
 
 # Function to load the CustomLLaMa3PromptTokenizingStrategy
 def load(tokenizer, cfg):
     return CustomLLaMa3PromptTokenizingStrategy(
-        CustomLLaMa3Prompter(),  # TODO: Remove this as it doesn't get used
+        None,
         tokenizer,
         cfg.train_on_inputs,
         cfg.sequence_len
