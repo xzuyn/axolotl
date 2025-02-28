@@ -363,19 +363,21 @@ class CustomLLaMa3PromptTokenizingStrategy(PromptTokenizingStrategy):
                 offset_mapping=tokenized_text["offset_mapping"],
                 compiled_regex_patterns=COMPILED_REGEX_PATTERNS
             )
-
-            # Fix any problem BOS or EOS tokens
-            if prefix["input_ids"][0] == self.tokenizer.bos_token_id and strip_bos:
-                prefix["input_ids"] = prefix["input_ids"][1:]
-                prefix["attention_mask"] = prefix["attention_mask"][1:]
-            if tokenized_text["input_ids"][-1] != self.tokenizer.eos_token_id and end_of_text:
-                tokenized_text["input_ids"].append(self.tokenizer.eos_token_id)
-                tokenized_text["attention_mask"].append(1)
-                tokenized_text["labels"].append(self.tokenizer.eos_token_id)
+            # Add missing BOS token
             if tokenized_text["input_ids"][0] == self.tokenizer.bos_token_id and strip_bos:
                 tokenized_text["input_ids"] = tokenized_text["input_ids"][1:]
                 tokenized_text["attention_mask"] = tokenized_text["attention_mask"][1:]
                 tokenized_text["labels"] = tokenized_text["labels"][1:]
+            # Strip unwanted BOS token
+            if prefix["input_ids"][0] == self.tokenizer.bos_token_id and strip_bos:
+                prefix["input_ids"] = prefix["input_ids"][1:]
+                prefix["attention_mask"] = prefix["attention_mask"][1:]
+                prefix["labels"] = prefix["labels"][1:]
+            # Add missing EOS token
+            if tokenized_text["input_ids"][-1] != self.tokenizer.eos_token_id and end_of_text:
+                tokenized_text["input_ids"].append(self.tokenizer.eos_token_id)
+                tokenized_text["attention_mask"].append(1)
+                tokenized_text["labels"].append(self.tokenizer.eos_token_id)
 
             # Handle masked user turn
             if self.train_on_inputs is False and (
