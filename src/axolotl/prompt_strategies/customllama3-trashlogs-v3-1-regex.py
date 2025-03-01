@@ -5,7 +5,7 @@ import re
 import ftfy
 import copy
 import logging
-from typing import List, Tuple, Pattern, Dict, 
+from typing import List, Tuple, Pattern, Dict
 
 # Import from axolotl package
 from axolotl.prompt_tokenizers import PromptTokenizingStrategy
