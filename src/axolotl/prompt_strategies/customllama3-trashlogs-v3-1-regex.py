@@ -254,16 +254,15 @@ def mask_regex_attention(
             - "input_ids" (List[int]): Unmodified token IDs.
             - "attention_mask" (List[int]): Modified attention mask with masked tokens set to 0.
             - "offset_mapping" (List[Tuple[int, int]]): Unmodified list of (start, end) indices for each token.
-            - "labels" (List[int]): Labels with masked tokens set to -100.
+            - "labels" (List[int]): Labels with masked tokens set to IGNORE_TOKEN_ID.
     """
 
     # Validate input lengths
     if not (len(input_ids) == len(attention_mask) == len(offset_mapping)):
         raise ValueError("Length of input_ids, attention_mask, and offset_mapping must be the same.")
 
-    labels = [label if mask == 1 else IGNORE_TOKEN_ID for label, mask in zip(input_ids, attention_mask)]
-
     # For each regex pattern, find all its occurrences in the text.
+    labels = [label if mask == 1 else IGNORE_TOKEN_ID for label, mask in zip(input_ids, attention_mask)]
     for pattern in compiled_regex_patterns:
         for match in pattern.finditer(text):
             found_index = match.start()
