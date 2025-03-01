@@ -248,7 +248,7 @@ def mask_regex_attention(
         compiled_regex_patterns (List[Pattern[str]]): List of precompiled regex patterns.
 
     Returns:
-        Dict[str, Union[List[int], List[Tuple[int, int]]]]: A dictionary containing:
+        Dict[str, Union[List[int], List[Tuple[int, int]]]]:
             - "input_ids" (List[int]): Unmodified token IDs.
             - "attention_mask" (List[int]): Modified attention mask with masked tokens set to 0.
             - "offset_mapping" (List[Tuple[int, int]]): Unmodified list of (start, end) indices for each token.
@@ -422,9 +422,4 @@ class CustomLLaMa3PromptTokenizingStrategy(PromptTokenizingStrategy):
 
 # Function to load the CustomLLaMa3PromptTokenizingStrategy
 def load(tokenizer, cfg):
-    return CustomLLaMa3PromptTokenizingStrategy(
-        None,
-        tokenizer,
-        cfg.train_on_inputs,
-        cfg.sequence_len
-    )
+    return CustomLLaMa3PromptTokenizingStrategy(None,tokenizer,cfg.train_on_inputs)
