@@ -422,4 +422,4 @@ class CustomLLaMa3PromptTokenizingStrategy(PromptTokenizingStrategy):
 
 # Function to load the CustomLLaMa3PromptTokenizingStrategy
 def load(tokenizer, cfg):
-    return CustomLLaMa3PromptTokenizingStrategy(None,tokenizer,cfg.train_on_inputs)
+    return CustomLLaMa3PromptTokenizingStrategy(None, tokenizer, cfg.train_on_inputs)
