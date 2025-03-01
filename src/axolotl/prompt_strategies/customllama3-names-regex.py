@@ -18,8 +18,8 @@ LOG = logging.getLogger("axolotl")
 IGNORE_TOKEN_ID = -100
 REGEX_PATTERNS = [
     "(?i)haze of pleasure",
-    "(?i)find(|s|ing) solace in",
-    "(?i)reveling in the satisfaction",
+    "(?i)(find|found)(|s|ing) solace in",
+    "(?i)revel(|ing) in the satisfaction",
     "(?i)with each breath",
     "(?i)a delicate dance",
     "(?i)wet flesh",
@@ -30,12 +30,12 @@ REGEX_PATTERNS = [
     "(?i)the game is on",
     "(?i)the choice is (mine|yours|his|hers|theirs)",
     "(?i)i don't bite\\.\\.\\. unless you want me to",
-    "(?i)half-lidded eyes",
+    "(?i)half(|-)lidded eyes",
     "(?i)(he|she|they) worries (his|her|their) bottom lip",
     "(?i)warring with",
     "(?i)take your pleasure",
     "(?i)(you|he|she|they) fiddle(|s) with the hem of (my|your|his|her|their) (skirt|shirt|pants)",
-    "(?i)kiss-bruised lips",
+    "(?i)kiss(|-)bruised lips",
     "(?i)bruising kiss",
     "(?i)despite (himself|herself|themselves|themself)",
     "(?i)(yours|mine) to take",
@@ -110,7 +110,7 @@ REGEX_PATTERNS = [
     "(?i)words turn into a purr",
     "(?i)grips like a vice",
     "(?i)send(|s) shiver(|s) (up|down) (my|your|his|her|their) spine",
-    "(?i)shiver(|s) run(|ning) (up|down) (my|your|his|her|their) spine",
+    "(?i)shiver(|s) (run|ran)(|ning) (up|down) (my|your|his|her|their) spine",
     "(?i)arched spine",
     "(?i)penetrated to the hilt",
     "(?i)the pressure in (my|your|his|her|their) loins",
@@ -132,6 +132,7 @@ REGEX_PATTERNS = [
     "(?i)a moth to a flame",
     "(?i)canvas",
     "(?i)eyes glint(|ed|ing)",
+    "(?i)eyes glinting",
     "(?i)camaraderie",
     "(?i)humble abode",
     "(?i)cold and calculating",
@@ -203,6 +204,7 @@ REGEX_PATTERNS = [
     "(?i)thank you for (posting|reading|sharing)",
     "(?i)[!:\\.;?*]  ",
     "(?i)\\.{4,}",
+    "(?i)sly grin",
     # Toasty's Additions
     "(?i)(cant|can't|couldn't|couldnt) help but",
     "(?i)smirk(ed)",
@@ -225,7 +227,7 @@ REGEX_PATTERNS = [
     "(?i)(?:ethical|legal|policy) (?:concerns|considerations|implications|guidelines) prevent me from (?:assisting|providing help)",
     "(?i)Due to (?:one or more of )?(?:(?:ethical|legal|policy) (?:concerns|considerations|implications|guidelines))(?: (?:and|or) (?:(?:ethical|legal|policy) (?:concerns|considerations|implications|guidelines)))*,? I(?: cannot| can't| am unable| am not|'m unable)",
     "(?i)(?:violates|against) our policy",
-    "(?i)I (?:cannot|can't|am unable to) assist with"
+    "(?i)I (?:cannot|can't|am unable to) assist with",
 ]
 COMPILED_REGEX_PATTERNS = [re.compile(pattern) for pattern in REGEX_PATTERNS]
 
@@ -248,7 +250,7 @@ def mask_regex_attention(
         compiled_regex_patterns (List[Pattern[str]]): List of precompiled regex patterns.
 
     Returns:
-        Dict[str, Union[List[int], List[Tuple[int, int]]]]: A dictionary containing:
+        Dict[str, Union[List[int], List[Tuple[int, int]]]]:
             - "input_ids" (List[int]): Unmodified token IDs.
             - "attention_mask" (List[int]): Modified attention mask with masked tokens set to 0.
             - "offset_mapping" (List[Tuple[int, int]]): Unmodified list of (start, end) indices for each token.
@@ -321,7 +323,7 @@ class CustomLLaMa3PromptTokenizingStrategy(PromptTokenizingStrategy):
 
             # Get tokens which will be masked out if using train_on_inputs: false
             prefix = self.tokenizer(
-                text=f"<|start_header_id|>{role_name}<|end_header_id|>\n\n",
+                text=f"<|start_header_id|>{ftfy.fix_text(role_name)}<|end_header_id|>\n\n",
                 truncation=False,
                 padding=False,
                 return_tensors=None,
@@ -335,7 +337,7 @@ class CustomLLaMa3PromptTokenizingStrategy(PromptTokenizingStrategy):
             # Get entire tokenized turn
             tokenized_text = self.tokenizer(
                 text=(
-                    f"<|start_header_id|>{role_name}<|end_header_id|>\n\n"
+                    f"<|start_header_id|>{ftfy.fix_text(role_name)}<|end_header_id|>\n\n"
                     f"{ftfy.fix_text(sharegpt_value.strip())}<|eot_id|>"
                 ),
                 truncation=False,
@@ -347,7 +349,7 @@ class CustomLLaMa3PromptTokenizingStrategy(PromptTokenizingStrategy):
             # Mask out undesired tokens using regex patterns
             tokenized_text = mask_regex_attention(
                 text=(
-                    f"<|start_header_id|>{role_name}<|end_header_id|>\n\n"
+                    f"<|start_header_id|>{ftfy.fix_text(role_name)}<|end_header_id|>\n\n"
                     f"{ftfy.fix_text(sharegpt_value.strip())}<|eot_id|>"
                 ),
                 input_ids=tokenized_text["input_ids"],
@@ -411,18 +413,9 @@ class CustomLLaMa3PromptTokenizingStrategy(PromptTokenizingStrategy):
             attention_mask.append(1)
             labels.append(self.tokenizer.eos_token_id)
 
-        return {
-            "input_ids": input_ids,
-            "attention_mask": attention_mask,
-            "labels": labels,
-        }
+        return {"input_ids": input_ids, "attention_mask": attention_mask, "labels": labels}
 
 
 # Function to load the CustomLLaMa3PromptTokenizingStrategy
 def load(tokenizer, cfg):
-    return CustomLLaMa3PromptTokenizingStrategy(
-        None,
-        tokenizer,
-        cfg.train_on_inputs,
-        cfg.sequence_len
-    )
+    return CustomLLaMa3PromptTokenizingStrategy(None, tokenizer, cfg.train_on_inputs)
