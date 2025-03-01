@@ -2,11 +2,10 @@
 
 # Import necessary modules and functions
 import re
+import ftfy
 import copy
 import logging
-from collections import defaultdict
-from typing import Generator, List, Tuple
-import ftfy
+from typing import List, Tuple, Pattern, Dict, 
 
 # Import from axolotl package
 from axolotl.prompt_tokenizers import PromptTokenizingStrategy
@@ -17,19 +16,10 @@ LOG = logging.getLogger("axolotl")
 
 # Define a constant token ID to ignore
 IGNORE_TOKEN_ID = -100
-# URL_FINDING_REGEX_PATTERN = (
-#     r"\b(?:https?|ftp|smtp):\/\/"  # Word boundary + protocol
-#     r"([a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}"  # Domain name
-#     r"(:\d{1,5})?"  # Optional port
-#     r"(\/[a-zA-Z0-9#\/?=&._-]*)?"  # Path, query parameters, or fragments
-#     r"\b"  # Word boundary to prevent partial matches
-# )
-
-# TODO: Remove/merge duplicates, and add more variations on patterns
 REGEX_PATTERNS = [
     "(?i)haze of pleasure",
-    "(?i)find(|s|ing) solace in",
-    "(?i)reveling in the satisfaction",
+    "(?i)(find|found)(|s|ing) solace in",
+    "(?i)revel(|ing) in the satisfaction",
     "(?i)with each breath",
     "(?i)a delicate dance",
     "(?i)wet flesh",
@@ -40,12 +30,12 @@ REGEX_PATTERNS = [
     "(?i)the game is on",
     "(?i)the choice is (mine|yours|his|hers|theirs)",
     "(?i)i don't bite\\.\\.\\. unless you want me to",
-    "(?i)half-lidded eyes",
+    "(?i)half(|-)lidded eyes",
     "(?i)(he|she|they) worries (his|her|their) bottom lip",
     "(?i)warring with",
     "(?i)take your pleasure",
     "(?i)(you|he|she|they) fiddle(|s) with the hem of (my|your|his|her|their) (skirt|shirt|pants)",
-    "(?i)kiss-bruised lips",
+    "(?i)kiss(|-)bruised lips",
     "(?i)bruising kiss",
     "(?i)despite (himself|herself|themselves|themself)",
     "(?i)(yours|mine) to take",
@@ -120,7 +110,7 @@ REGEX_PATTERNS = [
     "(?i)words turn into a purr",
     "(?i)grips like a vice",
     "(?i)send(|s) shiver(|s) (up|down) (my|your|his|her|their) spine",
-    "(?i)shiver(|s) run(|ning) (up|down) (my|your|his|her|their) spine",
+    "(?i)shiver(|s) (run|ran)(|ning) (up|down) (my|your|his|her|their) spine",
     "(?i)arched spine",
     "(?i)penetrated to the hilt",
     "(?i)the pressure in (my|your|his|her|their) loins",
@@ -142,6 +132,7 @@ REGEX_PATTERNS = [
     "(?i)a moth to a flame",
     "(?i)canvas",
     "(?i)eyes glint(|ed|ing)",
+    "(?i)eyes glinting",
     "(?i)camaraderie",
     "(?i)humble abode",
     "(?i)cold and calculating",
@@ -164,7 +155,6 @@ REGEX_PATTERNS = [
     "(?i)like a predator stalking its prey",
     "(?i)orchestra",
     "(?i)depths",
-    "(?i)dance",
     "(?i)chuckles darkly",
     "(?i)could not help but",
     "(?i)a mix of",
@@ -214,6 +204,7 @@ REGEX_PATTERNS = [
     "(?i)thank you for (posting|reading|sharing)",
     "(?i)[!:\\.;?*]  ",
     "(?i)\\.{4,}",
+    "(?i)sly grin",
     # Toasty's Additions
     "(?i)(cant|can't|couldn't|couldnt) help but",
     "(?i)smirk(ed)",
@@ -236,38 +227,54 @@ REGEX_PATTERNS = [
     "(?i)(?:ethical|legal|policy) (?:concerns|considerations|implications|guidelines) prevent me from (?:assisting|providing help)",
     "(?i)Due to (?:one or more of )?(?:(?:ethical|legal|policy) (?:concerns|considerations|implications|guidelines))(?: (?:and|or) (?:(?:ethical|legal|policy) (?:concerns|considerations|implications|guidelines)))*,? I(?: cannot| can't| am unable| am not|'m unable)",
     "(?i)(?:violates|against) our policy",
-    "(?i)I (?:cannot|can't|am unable to) assist with"
+    "(?i)I (?:cannot|can't|am unable to) assist with",
 ]
 COMPILED_REGEX_PATTERNS = [re.compile(pattern.lower()) for pattern in REGEX_PATTERNS]
 
 
 def mask_regex_attention(
-    original_text,
-    original_input_ids,
-    original_attention_mask,
-    original_offset_mapping,
-    compiled_regex_patterns
-):
-    # Make a copy of the original attention_mask and labels
-    new_attention_mask = original_attention_mask.copy()
-    new_labels = [
-        label if mask == 1
-        else IGNORE_TOKEN_ID
-        for label, mask in zip(original_input_ids, original_attention_mask)
-    ]
+    text: str,
+    input_ids: List[int],
+    attention_mask: List[int],
+    offset_mapping: List[Tuple[int, int]],
+    compiled_regex_patterns: List[Pattern[str]]
+) -> Dict[str, Union[List[int], List[Tuple[int, int]]]]:
+    """
+    Masks tokens in the attention_mask and corresponding labels based on regex matches in the text.
+
+    Parameters:
+        text (str): The original text.
+        input_ids (List[int]): The list of token IDs.
+        attention_mask (List[int]): Binary mask indicating which tokens are valid.
+        offset_mapping (List[Tuple[int, int]]): List of (start, end) indices for each token.
+        compiled_regex_patterns (List[Pattern[str]]): List of precompiled regex patterns.
+
+    Returns:
+        Dict[str, Union[List[int], List[Tuple[int, int]]]]:
+            - "input_ids" (List[int]): Unmodified token IDs.
+            - "attention_mask" (List[int]): Modified attention mask with masked tokens set to 0.
+            - "offset_mapping" (List[Tuple[int, int]]): Unmodified list of (start, end) indices for each token.
+            - "labels" (List[int]): Labels with masked tokens set to -100.
+    """
+
+    # Validate input lengths
+    if not (len(input_ids) == len(attention_mask) == len(offset_mapping)):
+        raise ValueError("Length of input_ids, attention_mask, and offset_mapping must be the same.")
+
+    labels = [label if mask == 1 else IGNORE_TOKEN_ID for label, mask in zip(input_ids, attention_mask)]
 
     # For each regex pattern, find all its occurrences in the text.
     for pattern in compiled_regex_patterns:
-        for match in pattern.finditer(original_text):
+        for match in pattern.finditer(text):
             found_index = match.start()
             end_index = match.end()
 
             # Check each token's character span; if it overlaps, mask it out.
-            for i, (token_start, token_end) in enumerate(original_offset_mapping):
+            for i, (token_start, token_end) in enumerate(offset_mapping):
                 if token_start < end_index and token_end > found_index:
-                    new_attention_mask[i], new_labels[i] = 0, IGNORE_TOKEN_ID
+                    attention_mask[i], labels[i] = 0, IGNORE_TOKEN_ID
 
-    return original_input_ids, new_attention_mask, new_labels
+    return {"input_ids": input_ids, "attention_mask": attention_mask, "offset_mapping": offset_mapping, "labels": labels}
 
 
 class CustomLLaMa3TrashLogsV3PromptTokenizingStrategy(PromptTokenizingStrategy):
@@ -293,18 +300,6 @@ class CustomLLaMa3TrashLogsV3PromptTokenizingStrategy(PromptTokenizingStrategy):
         num_turns = len(prompt[conversation_name])
         input_ids, attention_mask, labels = [], [], []
         for i, turn in enumerate(prompt[conversation_name]):
-            # Strip BOS token if it's not the first turn
-            if i == 0:
-                strip_bos = False
-            else:
-                strip_bos = True
-
-            # Check if this is the last turn, so we know to add the EOS token
-            if i == num_turns - 1:
-                end_of_text = True
-            else:
-                end_of_text = False
-
             # Add attachment info if it exists
             if turn["attachments"]:
                 turn_value = (
@@ -332,12 +327,14 @@ class CustomLLaMa3TrashLogsV3PromptTokenizingStrategy(PromptTokenizingStrategy):
                 padding=False,
                 return_tensors=None,
             )
-            if prefix["input_ids"][0] == self.tokenizer.bos_token_id and strip_bos:
+
+            # Strip unwanted BOS token
+            if self.tokenizer.bos_token_id and prefix["input_ids"][0] == self.tokenizer.bos_token_id and (i != 0):
                 prefix["input_ids"] = prefix["input_ids"][1:]
                 prefix["attention_mask"] = prefix["attention_mask"][1:]
 
             # Get entire tokenized turn
-            res = self.tokenizer(
+            tokenized_text = self.tokenizer(
                 text=(
                     f"<|start_header_id|>{ftfy.fix_text(turn_from)}<|end_header_id|>\n\n"
                     f"{ftfy.fix_text(turn_value.strip())}<|eot_id|>"
@@ -347,79 +344,75 @@ class CustomLLaMa3TrashLogsV3PromptTokenizingStrategy(PromptTokenizingStrategy):
                 return_tensors=None,
                 return_offsets_mapping=True
             )
-            if res["input_ids"][-1] != self.tokenizer.eos_token_id and end_of_text:
-                res["input_ids"].append(self.tokenizer.eos_token_id)
-                res["attention_mask"].append(1)
-            if res["input_ids"][0] == self.tokenizer.bos_token_id and strip_bos:
-                res["input_ids"] = res["input_ids"][1:]
-                res["attention_mask"] = res["attention_mask"][1:]
-                res["offset_mapping"] = res["offset_mapping"][1:]
 
-            # If the turn has an attachment, has an url, is from a bot, mentions another channel, or isn't a regular message or reply, mask entire turn
+            # Mask out undesired tokens using regex patterns
+            tokenized_text = mask_regex_attention(
+                text=(
+                    f"<|start_header_id|>{ftfy.fix_text(turn_from)}<|end_header_id|>\n\n"
+                    f"{ftfy.fix_text(turn_value.strip())}<|eot_id|>"
+                ),
+                input_ids=tokenized_text["input_ids"],
+                attention_mask=tokenized_text["attention_mask"],
+                offset_mapping=tokenized_text["offset_mapping"],
+                compiled_regex_patterns=COMPILED_REGEX_PATTERNS
+            )
+
+            # Strip unwanted BOS token
+            if self.tokenizer.bos_token_id and tokenized_text["input_ids"][0] == self.tokenizer.bos_token_id and (i != 0):
+                tokenized_text["input_ids"] = tokenized_text["input_ids"][1:]
+                tokenized_text["attention_mask"] = tokenized_text["attention_mask"][1:]
+                tokenized_text["labels"] = tokenized_text["labels"][1:]
+
+            # Add missing EOS token
+            if tokenized_text["input_ids"][-1] != self.tokenizer.eos_token_id and (i == num_turns - 1):
+                tokenized_text["input_ids"].append(self.tokenizer.eos_token_id)
+                tokenized_text["attention_mask"].append(1)
+                tokenized_text["labels"].append(self.tokenizer.eos_token_id)
+
+            # If the turn has an attachment, is from a bot, mentions another channel, or isn't a regular message or reply, mask entire turn
             # Teaching it to output any of this stuff is probably bad, but would probably also be bad contextually to remove all together
             if (
                 turn["attachments"]
                 or turn["stickers"]
                 or turn["isbot"]
-                # or re.search(URL_FINDING_REGEX_PATTERN, turn_value)
                 or "#" in turn_value  # TODO: Find a better way to check if a turn mentions another channel
                 or turn["type"] not in {"Default", "Reply"}
             ):
-                turn_input_ids = res["input_ids"]
-                turn_attention_mask = [0] * len(res["attention_mask"])
-                turn_labels = [IGNORE_TOKEN_ID] * len(res["input_ids"])
+                tokenized_text["attention_mask"] = [0] * len(tokenized_text["attention_mask"])
+                tokenized_text["labels"] = [IGNORE_TOKEN_ID] * len(tokenized_text["input_ids"])
             else:
-                turn_input_ids, turn_attention_mask, turn_labels = mask_regex_attention(
-                    original_text=(
-                        f"<|start_header_id|>{ftfy.fix_text(turn_from)}<|end_header_id|>\n\n"
-                        f"{ftfy.fix_text(turn_value.strip())}<|eot_id|>"
-                    ),
-                    original_input_ids=res["input_ids"],
-                    original_attention_mask=res["attention_mask"],
-                    original_offset_mapping=res["offset_mapping"],
-                    compiled_regex_patterns=COMPILED_REGEX_PATTERNS
-                )
-                turn_attention_mask = (
+                tokenized_text["attention_mask"] = (
                     [0] * len(prefix["attention_mask"])  # Mask the prefix
-                    + turn_attention_mask[len(prefix["attention_mask"]):]
+                    + tokenized_text["attention_mask"][len(prefix["attention_mask"]):]
                 )
-                turn_labels = (
+                tokenized_text["labels"] = (
                     [IGNORE_TOKEN_ID] * len(prefix["input_ids"])  # Mask the prefix
-                    + [label if mask == 1 else IGNORE_TOKEN_ID for label, mask in
-                       zip(turn_input_ids, turn_attention_mask)][len(prefix["input_ids"]):]
+                    + tokenized_text["labels"][len(prefix["input_ids"]):]
                 )
 
-            input_ids += turn_input_ids
-            attention_mask += turn_attention_mask
-            labels += turn_labels
+            input_ids += tokenized_text["input_ids"]
+            attention_mask += tokenized_text["attention_mask"]
+            labels += tokenized_text["labels"]
 
-        # Fix missing or unmasked BOS token
+        # Add missing BOS token
         if self.tokenizer.bos_token_id and input_ids[0] != self.tokenizer.bos_token_id:
             input_ids.insert(0, self.tokenizer.bos_token_id)
-            labels.insert(0, IGNORE_TOKEN_ID)
             attention_mask.insert(0, 0)
+            labels.insert(0, IGNORE_TOKEN_ID)
+        # Mask unmasked BOS token
         elif self.tokenizer.bos_token_id and input_ids[0] == self.tokenizer.bos_token_id:
-            labels[0] = IGNORE_TOKEN_ID
             attention_mask[0] = 0
+            labels[0] = IGNORE_TOKEN_ID
 
-        # Fix missing EOS token
+        # Add missing EOS token
         if input_ids[-1] != self.tokenizer.eos_token_id:
             input_ids.append(self.tokenizer.eos_token_id)
-            labels.append(self.tokenizer.eos_token_id)
             attention_mask.append(1)
+            labels.append(self.tokenizer.eos_token_id)
 
-        return {
-            "input_ids": input_ids,
-            "attention_mask": attention_mask,
-            "labels": labels,
-        }
+        return {"input_ids": input_ids, "attention_mask": attention_mask, "labels": labels}
 
 
 # Function to load the CustomLLaMa3TrashLogsV3PromptTokenizingStrategy
 def load(tokenizer, cfg):
-    return CustomLLaMa3TrashLogsV3PromptTokenizingStrategy(
-        None,
-        tokenizer,
-        cfg.train_on_inputs,
-        cfg.sequence_len
-    )
+    return CustomLLaMa3TrashLogsV3PromptTokenizingStrategy(None, tokenizer, cfg.train_on_inputs)
