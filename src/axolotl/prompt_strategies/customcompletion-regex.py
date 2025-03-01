@@ -250,7 +250,7 @@ def mask_regex_attention(
         compiled_regex_patterns (List[Pattern[str]]): List of precompiled regex patterns.
 
     Returns:
-        Dict[str, Union[List[int], List[Tuple[int, int]]]]: A dictionary containing:
+        Dict[str, Union[List[int], List[Tuple[int, int]]]]:
             - "input_ids" (List[int]): Unmodified token IDs.
             - "attention_mask" (List[int]): Modified attention mask with masked tokens set to 0.
             - "offset_mapping" (List[Tuple[int, int]]): Unmodified list of (start, end) indices for each token.
@@ -324,11 +324,7 @@ class CustomCompletionPromptTokenizingStrategy(PromptTokenizingStrategy):
             tokenized_text["attention_mask"].append(1)
             tokenized_text["labels"].append(self.tokenizer.eos_token_id)
 
-        return {
-            "input_ids": tokenized_text["input_ids"],
-            "attention_mask": tokenized_text["attention_mask"],
-            "labels": tokenized_text["labels"],
-        }
+        return {"input_ids": tokenized_text["input_ids"], "attention_mask": tokenized_text["attention_mask"], "labels": tokenized_text["labels"],}
 
 
 # Function to load the CustomCompletionPromptTokenizingStrategy
