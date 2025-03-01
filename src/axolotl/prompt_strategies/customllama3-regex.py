@@ -254,7 +254,7 @@ def mask_regex_attention(
             - "input_ids" (List[int]): Unmodified token IDs.
             - "attention_mask" (List[int]): Modified attention mask with masked tokens set to 0.
             - "offset_mapping" (List[Tuple[int, int]]): Unmodified list of (start, end) indices for each token.
-            - "labels" (List[int]): Labels with masked tokens set to -100.
+            - "labels" (List[int]): Labels with masked tokens set to IGNORE_TOKEN_ID.
     """
 
     # Validate input lengths
