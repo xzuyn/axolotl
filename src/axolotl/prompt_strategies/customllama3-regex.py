@@ -18,8 +18,8 @@ LOG = logging.getLogger("axolotl")
 IGNORE_TOKEN_ID = -100
 REGEX_PATTERNS = [
     "(?i)haze of pleasure",
-    "(?i)find(|s|ing) solace in",
-    "(?i)reveling in the satisfaction",
+    "(?i)(find|found)(|s|ing) solace in",
+    "(?i)revel(|ing) in the satisfaction",
     "(?i)with each breath",
     "(?i)a delicate dance",
     "(?i)wet flesh",
@@ -30,12 +30,12 @@ REGEX_PATTERNS = [
     "(?i)the game is on",
     "(?i)the choice is (mine|yours|his|hers|theirs)",
     "(?i)i don't bite\\.\\.\\. unless you want me to",
-    "(?i)half-lidded eyes",
+    "(?i)half(|-)lidded eyes",
     "(?i)(he|she|they) worries (his|her|their) bottom lip",
     "(?i)warring with",
     "(?i)take your pleasure",
     "(?i)(you|he|she|they) fiddle(|s) with the hem of (my|your|his|her|their) (skirt|shirt|pants)",
-    "(?i)kiss-bruised lips",
+    "(?i)kiss(|-)bruised lips",
     "(?i)bruising kiss",
     "(?i)despite (himself|herself|themselves|themself)",
     "(?i)(yours|mine) to take",
@@ -110,7 +110,7 @@ REGEX_PATTERNS = [
     "(?i)words turn into a purr",
     "(?i)grips like a vice",
     "(?i)send(|s) shiver(|s) (up|down) (my|your|his|her|their) spine",
-    "(?i)shiver(|s) run(|ning) (up|down) (my|your|his|her|their) spine",
+    "(?i)shiver(|s) (run|ran)(|ning) (up|down) (my|your|his|her|their) spine",
     "(?i)arched spine",
     "(?i)penetrated to the hilt",
     "(?i)the pressure in (my|your|his|her|their) loins",
@@ -132,6 +132,7 @@ REGEX_PATTERNS = [
     "(?i)a moth to a flame",
     "(?i)canvas",
     "(?i)eyes glint(|ed|ing)",
+    "(?i)eyes glinting",
     "(?i)camaraderie",
     "(?i)humble abode",
     "(?i)cold and calculating",
@@ -203,6 +204,7 @@ REGEX_PATTERNS = [
     "(?i)thank you for (posting|reading|sharing)",
     "(?i)[!:\\.;?*]  ",
     "(?i)\\.{4,}",
+    "(?i)sly grin",
     # Toasty's Additions
     "(?i)(cant|can't|couldn't|couldnt) help but",
     "(?i)smirk(ed)",
@@ -225,7 +227,7 @@ REGEX_PATTERNS = [
     "(?i)(?:ethical|legal|policy) (?:concerns|considerations|implications|guidelines) prevent me from (?:assisting|providing help)",
     "(?i)Due to (?:one or more of )?(?:(?:ethical|legal|policy) (?:concerns|considerations|implications|guidelines))(?: (?:and|or) (?:(?:ethical|legal|policy) (?:concerns|considerations|implications|guidelines)))*,? I(?: cannot| can't| am unable| am not|'m unable)",
     "(?i)(?:violates|against) our policy",
-    "(?i)I (?:cannot|can't|am unable to) assist with"
+    "(?i)I (?:cannot|can't|am unable to) assist with",
 ]
 COMPILED_REGEX_PATTERNS = [re.compile(pattern) for pattern in REGEX_PATTERNS]
 
@@ -329,11 +331,6 @@ class CustomLLaMa3PromptTokenizingStrategy(PromptTokenizingStrategy):
                 return_tensors=None,
             )
 
-            # Strip unwanted BOS token
-            if self.tokenizer.bos_token_id and prefix["input_ids"][0] == self.tokenizer.bos_token_id and (i != 0):
-                prefix["input_ids"] = prefix["input_ids"][1:]
-                prefix["attention_mask"] = prefix["attention_mask"][1:]
-
             # Get entire tokenized turn
             tokenized_text = self.tokenizer(
                 text=(
@@ -358,13 +355,18 @@ class CustomLLaMa3PromptTokenizingStrategy(PromptTokenizingStrategy):
                 compiled_regex_patterns=COMPILED_REGEX_PATTERNS
             )
 
-            # Strip unwanted BOS token
+            # Strip unwanted BOS token from prefix
+            if self.tokenizer.bos_token_id and prefix["input_ids"][0] == self.tokenizer.bos_token_id and (i != 0):
+                prefix["input_ids"] = prefix["input_ids"][1:]
+                prefix["attention_mask"] = prefix["attention_mask"][1:]
+
+            # Strip unwanted BOS token from tokenized_text
             if self.tokenizer.bos_token_id and tokenized_text["input_ids"][0] == self.tokenizer.bos_token_id and (i != 0):
                 tokenized_text["input_ids"] = tokenized_text["input_ids"][1:]
                 tokenized_text["attention_mask"] = tokenized_text["attention_mask"][1:]
                 tokenized_text["labels"] = tokenized_text["labels"][1:]
 
-            # Add missing EOS token
+            # Add missing EOS token to tokenized_text
             if tokenized_text["input_ids"][-1] != self.tokenizer.eos_token_id and (i == num_turns - 1):
                 tokenized_text["input_ids"].append(self.tokenizer.eos_token_id)
                 tokenized_text["attention_mask"].append(1)
@@ -413,11 +415,7 @@ class CustomLLaMa3PromptTokenizingStrategy(PromptTokenizingStrategy):
             attention_mask.append(1)
             labels.append(self.tokenizer.eos_token_id)
 
-        return {
-            "input_ids": input_ids,
-            "attention_mask": attention_mask,
-            "labels": labels,
-        }
+        return {"input_ids": input_ids, "attention_mask": attention_mask, "labels": labels}
 
 
 # Function to load the CustomLLaMa3PromptTokenizingStrategy
