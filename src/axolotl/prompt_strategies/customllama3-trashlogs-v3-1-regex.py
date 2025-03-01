@@ -352,14 +352,11 @@ class CustomLLaMa3TrashLogsV3PromptTokenizingStrategy(PromptTokenizingStrategy):
                 compiled_regex_patterns=COMPILED_REGEX_PATTERNS
             )
 
-            # Strip unwanted BOS token from prefix
+            # Strip unwanted BOS token from prefix and tokenized_text
             if self.tokenizer.bos_token_id and prefix["input_ids"][0] == self.tokenizer.bos_token_id and (i != 0):
                 prefix["input_ids"] = prefix["input_ids"][1:]
-                prefix["attention_mask"] = prefix["attention_mask"][1:]
-
-            # Strip unwanted BOS token from tokenized_text
-            if self.tokenizer.bos_token_id and tokenized_text["input_ids"][0] == self.tokenizer.bos_token_id and (i != 0):
                 tokenized_text["input_ids"] = tokenized_text["input_ids"][1:]
+                prefix["attention_mask"] = prefix["attention_mask"][1:]
                 tokenized_text["attention_mask"] = tokenized_text["attention_mask"][1:]
                 tokenized_text["labels"] = tokenized_text["labels"][1:]
 
