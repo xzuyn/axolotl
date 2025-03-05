@@ -81,44 +81,37 @@ class CustomChatMLPromptTokenizingStrategy(PromptTokenizingStrategy):
                 return_tensors=None,
             )
 
-            # Get labels
-            tokenized_text["labels"] = [
-                label if mask == 1 else IGNORE_TOKEN_ID
-                for label, mask in zip(tokenized_text["input_ids"], tokenized_text["attention_mask"])
-            ]
-
             # Handle masked user turn
             if self.train_on_inputs is False and sharegpt_from in ["system", "human", "human-chat"]:
                 tokenized_text["attention_mask"] = [0] * len(tokenized_text["attention_mask"])
-                tokenized_text["labels"] = [IGNORE_TOKEN_ID] * len(tokenized_text["input_ids"])
             # Handle partially masked model turn
             elif self.train_on_inputs is False and sharegpt_from in ["gpt", "gpt-chat", "thought"]:
                 tokenized_text["attention_mask"] = (
                     [0] * len(prefix["attention_mask"])  # Mask the prefix
                     + tokenized_text["attention_mask"][len(prefix["attention_mask"]):]
                 )
-                tokenized_text["labels"] = (
-                    [IGNORE_TOKEN_ID] * len(prefix["input_ids"])  # Mask the prefix
-                    + tokenized_text["labels"][len(prefix["input_ids"]):]
-                )
 
             input_ids += tokenized_text["input_ids"]
             attention_mask += tokenized_text["attention_mask"]
-            labels += tokenized_text["labels"]
 
         # Add missing BOS token
         if self.tokenizer.bos_token_id and input_ids[0] != self.tokenizer.bos_token_id:
             input_ids.insert(0, self.tokenizer.bos_token_id)
             attention_mask.insert(0, 0)
-            labels.insert(0, IGNORE_TOKEN_ID)
 
         # Add missing EOS token
         if input_ids[-1] != self.tokenizer.eos_token_id:
             input_ids.append(self.tokenizer.eos_token_id)
             attention_mask.append(1)
-            labels.append(self.tokenizer.eos_token_id)
 
-        return {"input_ids": input_ids, "attention_mask": attention_mask, "labels": labels}
+        return {
+            "input_ids": input_ids,
+            "attention_mask": attention_mask,
+            "labels": [
+                label if mask == 1 else IGNORE_TOKEN_ID
+                for label, mask in zip(tokenized_text["input_ids"], tokenized_text["attention_mask"])
+            ]
+        }
 
 
 # Function to load the CustomChatMLPromptTokenizingStrategy
