@@ -65,6 +65,7 @@ class CustomChatMLPromptTokenizingStrategy(PromptTokenizingStrategy):
             prefix_text = f"{'\n' if i != 0 else ''}<|im_start|>{role_name}\n"
             prefix = self.tokenizer(
                 text=prefix_text,
+                add_special_tokens=False,
                 truncation=False,
                 padding=False,
                 return_tensors=None,
@@ -108,7 +109,7 @@ class CustomChatMLPromptTokenizingStrategy(PromptTokenizingStrategy):
             "attention_mask": attention_mask,
             "labels": [
                 label if mask == 1 else IGNORE_TOKEN_ID
-                for label, mask in zip(tokenized_text["input_ids"], tokenized_text["attention_mask"])
+                for label, mask in zip(input_ids, attention_mask)
             ]
         }
 
