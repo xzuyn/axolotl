@@ -232,48 +232,27 @@ REGEX_PATTERNS = [
 COMPILED_REGEX_PATTERNS = [re.compile(pattern) for pattern in REGEX_PATTERNS]
 
 
-def mask_regex_attention(
-    text: str,
-    input_ids: List[int],
-    attention_mask: List[int],
-    offset_mapping: List[Tuple[int, int]],
-    compiled_regex_patterns: List[Pattern[str]]
-) -> Dict[str, Union[List[int], List[Tuple[int, int]]]]:
-    """
-    Masks tokens in the attention_mask and corresponding labels based on regex matches in the text.
+def mask_regex_attention_tokenizer(tokenizer, text, compiled_regex_patterns):
+    tokenized_text = tokenizer(
+        text=text,
+        add_special_tokens=False,
+        truncation=False,
+        padding=False,
+        return_tensors=None,
+        return_offsets_mapping=True,
+    )
 
-    Parameters:
-        text (str): The original text.
-        input_ids (List[int]): The list of token IDs.
-        attention_mask (List[int]): Binary mask indicating which tokens are valid.
-        offset_mapping (List[Tuple[int, int]]): List of (start, end) indices for each token.
-        compiled_regex_patterns (List[Pattern[str]]): List of precompiled regex patterns.
-
-    Returns:
-        Dict[str, Union[List[int], List[Tuple[int, int]]]]:
-            - "input_ids" (List[int]): Unmodified token IDs.
-            - "attention_mask" (List[int]): Modified attention mask with masked tokens set to 0.
-            - "offset_mapping" (List[Tuple[int, int]]): Unmodified list of (start, end) indices for each token.
-            - "labels" (List[int]): Labels with masked tokens set to IGNORE_TOKEN_ID.
-    """
-
-    # Validate input lengths
-    if not (len(input_ids) == len(attention_mask) == len(offset_mapping)):
-        raise ValueError("Length of input_ids, attention_mask, and offset_mapping must be the same.")
-
-    # For each regex pattern, find all its occurrences in the text.
-    labels = [token if mask == 1 else IGNORE_TOKEN_ID for token, mask in zip(input_ids, attention_mask)]
     for pattern in compiled_regex_patterns:
         for match in pattern.finditer(text):
             found_index = match.start()
             end_index = match.end()
 
             # Check each token's character span; if it overlaps, mask it out.
-            for i, (token_start, token_end) in enumerate(offset_mapping):
+            for i, (token_start, token_end) in enumerate(tokenized_text["offset_mapping"]):
                 if token_start < end_index and token_end > found_index:
-                    attention_mask[i], labels[i] = 0, IGNORE_TOKEN_ID
+                    tokenized_text["attention_mask"][i] = 0
 
-    return {"input_ids": input_ids, "attention_mask": attention_mask, "offset_mapping": offset_mapping, "labels": labels}
+    return tokenized_text
 
 
 class CustomCompletionPromptTokenizingStrategy(PromptTokenizingStrategy):
@@ -287,43 +266,31 @@ class CustomCompletionPromptTokenizingStrategy(PromptTokenizingStrategy):
         self.field = "text" if not field else field
 
     def tokenize_prompt(self, prompt):
-        original_text = ftfy.fix_text(prompt[self.field].strip())
-
-        # Get entire tokenized text
-        tokenized_text = self.tokenizer(
-            text=original_text,
-            truncation=False,
-            padding=False,
-            return_tensors=None,
-            return_offsets_mapping=True,
-        )
-
-        # Mask out undesired tokens using regex patterns
-        tokenized_text = mask_regex_attention(
-            text=original_text,
-            input_ids=tokenized_text["input_ids"],
-            attention_mask=tokenized_text["attention_mask"],
-            offset_mapping=tokenized_text["offset_mapping"],
+        # Tokenize and create mask out undesired tokens using regex patterns
+        tokenized_text = mask_regex_attention_tokenizer(
+            tokenizer=self.tokenizer,
+            text=ftfy.fix_text(prompt[self.field].strip()),
             compiled_regex_patterns=COMPILED_REGEX_PATTERNS,
         )
 
         # Add missing BOS token
-        if self.tokenizer.bos_token_id and tokenized_text["input_ids"][0] != self.tokenizer.bos_token_id:
-            tokenized_text["input_ids"].insert(0, self.tokenizer.bos_token_id)
-            tokenized_text["attention_mask"].insert(0, 0)
-            tokenized_text["labels"].insert(0, IGNORE_TOKEN_ID)
-        # Mask unmasked BOS token
-        elif self.tokenizer.bos_token_id and tokenized_text["input_ids"][0] == self.tokenizer.bos_token_id:
-            tokenized_text["attention_mask"][0] = 0
-            tokenized_text["labels"][0] = IGNORE_TOKEN_ID
+        if self.tokenizer.bos_token_id and input_ids[0] != self.tokenizer.bos_token_id:
+            input_ids.insert(0, self.tokenizer.bos_token_id)
+            attention_mask.insert(0, 0)
 
         # Add missing EOS token
-        if tokenized_text["input_ids"][-1] != self.tokenizer.eos_token_id:
-            tokenized_text["input_ids"].append(self.tokenizer.eos_token_id)
-            tokenized_text["attention_mask"].append(1)
-            tokenized_text["labels"].append(self.tokenizer.eos_token_id)
+        if input_ids[-1] != self.tokenizer.eos_token_id:
+            input_ids.append(self.tokenizer.eos_token_id)
+            attention_mask.append(1)
 
-        return {"input_ids": tokenized_text["input_ids"], "attention_mask": tokenized_text["attention_mask"], "labels": tokenized_text["labels"]}
+        return {
+            "input_ids": tokenized_text["input_ids"],
+            "attention_mask": tokenized_text["attention_mask"],
+            "labels": [
+                label if mask == 1 else IGNORE_TOKEN_ID
+                for label, mask in zip(tokenized_text["input_ids"], tokenized_text["attention_mask"])
+            ]
+        }
 
 
 # Function to load the CustomCompletionPromptTokenizingStrategy
