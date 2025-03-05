@@ -264,6 +264,15 @@ class CustomChatMLPromptTokenizingStrategy(PromptTokenizingStrategy):
         super().__init__(prompter, tokenizer, *args, **kwargs)
 
     def tokenize_prompt(self, prompt):
+        # ShareGPT-to-ChatML Dictionary
+        role_dict = {
+            "system": "system",
+            "human": "user",
+            "gpt": "assistant",
+            "human-chat": "user",
+            "gpt-chat": "assistant"
+        }
+
         # Sometimes it gets named 'conversations' and other times 'conversation'
         if "conversations" in prompt:
             conversation_name = "conversations"
@@ -276,15 +285,6 @@ class CustomChatMLPromptTokenizingStrategy(PromptTokenizingStrategy):
         # Iterate over each conversation turn in the prompt
         input_ids, attention_mask = [], []
         for i, turn in enumerate(prompt[conversation_name]):
-            # ShareGPT-to-ChatML Dictionary
-            role_dict = {
-                "system": "system",
-                "human": "user",
-                "gpt": "assistant",
-                "human-chat": "user",
-                "gpt-chat": "assistant"
-            }
-
             if turn["from"] == "human-chat":
                 sharegpt_value = f"{turn['name'].strip()}: {turn['value'].strip()}"
             elif turn["from"] == "gpt-chat":
