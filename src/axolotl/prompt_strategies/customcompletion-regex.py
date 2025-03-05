@@ -274,14 +274,14 @@ class CustomCompletionPromptTokenizingStrategy(PromptTokenizingStrategy):
         )
 
         # Add missing BOS token
-        if self.tokenizer.bos_token_id and input_ids[0] != self.tokenizer.bos_token_id:
-            input_ids.insert(0, self.tokenizer.bos_token_id)
-            attention_mask.insert(0, 0)
+        if self.tokenizer.bos_token_id and tokenized_text["input_ids"][0] != self.tokenizer.bos_token_id:
+            tokenized_text["input_ids"].insert(0, self.tokenizer.bos_token_id)
+            tokenized_text["attention_mask"].insert(0, 0)
 
         # Add missing EOS token
         if input_ids[-1] != self.tokenizer.eos_token_id:
-            input_ids.append(self.tokenizer.eos_token_id)
-            attention_mask.append(1)
+            tokenized_text["input_ids"].append(self.tokenizer.eos_token_id)
+            tokenized_text["attention_mask"].append(1)
 
         return {
             "input_ids": tokenized_text["input_ids"],
