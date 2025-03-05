@@ -238,6 +238,7 @@ def mask_regex_attention_tokenizer(tokenizer, text, compiled_regex_patterns):
 
     tokenized_text = tokenizer(
         text=text,
+        add_special_tokens=False,
         truncation=False,
         padding=False,
         return_tensors=None,
@@ -324,17 +325,6 @@ class CustomChatMLPromptTokenizingStrategy(PromptTokenizingStrategy):
             if self.train_on_inputs is False:
                 COMPILED_REGEX_PATTERNS.pop()
 
-            # Strip unwanted BOS token from tokenized_text
-            if self.tokenizer.bos_token_id and tokenized_text["input_ids"][0] == self.tokenizer.bos_token_id and (i != 0):
-                for key in ["input_ids", "attention_mask", "labels"]:
-                    tokenized_text[key] = tokenized_text[key][1:]
-
-            # Add missing EOS token to tokenized_text
-            if tokenized_text["input_ids"][-1] != self.tokenizer.eos_token_id and (i == len(prompt[conversation_name]) - 1):
-                for key in ["input_ids", "labels"]:
-                    tokenized_text[key].append(self.tokenizer.eos_token_id)
-                tokenized_text["attention_mask"].append(1)
-
             input_ids += tokenized_text["input_ids"]
             attention_mask += tokenized_text["attention_mask"]
             labels += tokenized_text["labels"]
@@ -344,10 +334,6 @@ class CustomChatMLPromptTokenizingStrategy(PromptTokenizingStrategy):
             input_ids.insert(0, self.tokenizer.bos_token_id)
             attention_mask.insert(0, 0)
             labels.insert(0, IGNORE_TOKEN_ID)
-        # Mask unmasked BOS token
-        elif self.tokenizer.bos_token_id and input_ids[0] == self.tokenizer.bos_token_id:
-            attention_mask[0] = 0
-            labels[0] = IGNORE_TOKEN_ID
 
         # Add missing EOS token
         if input_ids[-1] != self.tokenizer.eos_token_id:
