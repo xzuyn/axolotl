@@ -36,7 +36,7 @@ class CustomChatMLPromptTokenizingStrategy(PromptTokenizingStrategy):
             exit()
 
         # Iterate over each conversation turn in the prompt
-        input_ids, attention_mask, labels = [], [], []
+        input_ids, attention_mask = [], []
         for i, turn in enumerate(prompt[conversation_name]):
             # Get correct roles and messages
             sharegpt_from, sharegpt_value = turn["from"].strip(), turn["value"].strip()
@@ -62,18 +62,17 @@ class CustomChatMLPromptTokenizingStrategy(PromptTokenizingStrategy):
                 exit()
 
             # Get tokens which will be masked out if using train_on_inputs: false
+            prefix_text = f"{'\n' if i != 0 else ''}<|im_start|>{role_name}\n"
             prefix = self.tokenizer(
-                text=f"{'\n' if i != 0 else ''}<|im_start|>{role_name}\n",
+                text=prefix_text,
                 truncation=False,
                 padding=False,
                 return_tensors=None,
             )
-
             # Get entire tokenized turn
             tokenized_text = self.tokenizer(
                 text=(
-                    f"{'\n' if i != 0 else ''}<|im_start|>{role_name}\n"
-                    f"{ftfy.fix_text(sharegpt_value.strip())}<|im_end|>"
+                    f"{prefix_text}{ftfy.fix_text(sharegpt_value.strip())}<|im_end|>"
                 ),
                 add_special_tokens=False,
                 truncation=False,
