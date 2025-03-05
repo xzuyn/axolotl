@@ -46,6 +46,10 @@ overrides_of_model_config:
     type: # linear | dynamic
     factor: # float
 
+# optional overrides the base model loading from_pretrained
+overrides_of_model_kwargs:
+  # use_cache: False
+
 # optional overrides to the bnb 4bit quantization configuration
 # https://huggingface.co/docs/transformers/main/main_classes/quantization#transformers.BitsAndBytesConfig
 bnb_config_kwargs:
@@ -83,22 +87,20 @@ lora_on_cpu: true
 datasets:
   # HuggingFace dataset repo | s3://,gs:// path | "json" for local dataset, make sure to fill data_files
   - path: vicgalle/alpaca-gpt4
-  # The type of prompt to use for training. [alpaca, sharegpt, gpteacher, oasst, reflection]
+    # The type of prompt to use for training. [alpaca, gpteacher, oasst, reflection]
     type: alpaca # format | format:<prompt_style> (chat/instruct) | <prompt_strategies>.load_<load_fn>
     ds_type: # Optional[str] (json|arrow|parquet|text|csv) defines the datatype when path is a file
     data_files: # Optional[str] path to source data files
-    shards: # Optional[int] number of shards to split data into
+
+    shards: # Optional[int] split dataset into N pieces (use with shards_idx)
+    shards_idx: # Optional[int] = 0 the index of sharded dataset to use
+
+    preprocess_shards: # Optional[int] process dataset in N sequential chunks for memory efficiency (exclusive with `shards`)
+
     name: # Optional[str] name of dataset configuration to load
     train_on_split: train # Optional[str] name of dataset split to load from
-
-    # Optional[str] fastchat conversation type, only used with type: sharegpt
-    conversation: # Options (see Conversation 'name'): https://github.com/lm-sys/FastChat/blob/main/fastchat/conversation.py
-    field_human: # Optional[str]. Human key to use for conversation.
-    field_model: # Optional[str]. Assistant key to use for conversation.
-    # Add additional keys from your dataset as input or output roles
-    roles:
-      input: # Optional[List[str]]. These will be masked based on train_on_input
-      output: # Optional[List[str]].
+    revision: # Optional[str] The specific revision of the dataset to use when loading from the Hugging Face Hub. This can be a commit hash, tag, or branch name. If not specified, the latest version will be used. This parameter is ignored for local datasets.
+    trust_remote_code: # Optional[bool] Trust remote code for untrusted source
 
   # Custom user instruction prompt
   - path: repo
@@ -123,9 +125,74 @@ datasets:
       # For `completion` datsets only, uses the provided field instead of `text` column
       field:
 
+  # Using chat template
+  - path: ...
+    # Set type to `chat_template` to use this strategy
+    type: chat_template
+    # Specify the name of the chat template to use
+    # The name of the chat template to use for training, following values are supported:
+    # - tokenizer_default: Uses the chat template that is available in the tokenizer_config.json. If the chat template is not available in the tokenizer, it will raise an error. This is the default.
+    # - alpaca/inst/chatml/gemma/cohere/llama3/phi_3/deepseek_v2/jamba: These chat templates are available in the axolotl codebase at src/axolotl/utils/chat_templates.py
+    # - tokenizer_default_fallback_*: where * is the name of the chat template to fallback to if the tokenizer does not have a chat template else default to tokenizer. E.g. tokenizer_default_fallback_chatml.
+    # - jinja: Uses a custom jinja template for the chat template. The custom jinja template should be provided in the chat_template_jinja field.
+    chat_template: tokenizer_default
+
+    # Custom jinja chat template. Used only if `chat_template: jinja` or empty.
+    chat_template_jinja:
+
+    # Key containing the messages (default: "messages")
+    field_messages: messages
+
+    # Mapping of properties from the input dataset to the chat template.
+    # (default: message_property_mappings={'role':'role', 'content':'content'})
+    # If a property exists in the template but not in this mapping, the system will attempt
+    # to load it directly from the message using the property name as the key.
+    # Example: In the mapping below, 'from' is loaded from input dataset and used as 'role',
+    # while 'value' is loaded and used as 'content' in the chat template.
+    message_property_mappings:
+      role: from
+      content: value
+      # ...
+
+    # Optional[Dict[str, List]]. Roles mapping in the messages. The default is:
+    roles:
+      user: ["human", "user"]
+      assistant: ["gpt", "assistant"]
+      system: ["system"]
+      tool: ["tool"]
+
+    # Optional[bool]. Whether to drop the system turn from the dataset. Only works with chat_template.
+    # This does not drop the default system message from chat_template if it exists. If you wish to,
+    # we recommend using a custom jinja template with the default system message removed or
+    # adding a system turn with empty content.
+    drop_system_message:
+
+    # IMPORTANT: The following fields determine which parts of the conversation to train on.
+    # Priority order: message_field_training > message_field_training_detail > train_on_inputs or role in roles_to_train
+    # See examples at `docs/dataset-formats/conversation.qmd`
+    # Note: If the below 4 fields are set to empty, defaults to training only on the last message.
+
+    # Optional[List[str]]. Roles to train on. The tokens from these roles will be considered for the loss.
+    roles_to_train: ["assistant"]  # default
+    # Optional[str]. Which EOS tokens to train on in the conversation. Possible values are:
+    # - all: train on all EOS tokens
+    # - turn (default): train on the EOS token at the end of each trainable turn
+    # - last: train on the last EOS token in the conversation
+    # TIP: Please make sure that your `tokenizer.eos_token` is same as EOS/EOT token in template. Otherwise, set `eos_token` under `special_tokens`.
+    train_on_eos: last
+    # The key in the message turn that indicates via boolean whether tokens of a turn should be considered for training. Useful to selectively train on certain turns besides the `roles_to_train`.
+    message_field_training: training
+    # The key in the message turn that contains the training details. Useful to selectively train on certain tokens in a turn.
+    # The value of the key is a List[Dict] containing `begin_offset` (start character index in content), `end_offset` (end character index in content), and `train` (boolean whether to train).
+    message_field_training_detail: train_detail
+
+
 # If false, the datasets will not be shuffled and will keep their original order in `datasets`.
 # The same applies to the `test_datasets` option and the `pretraining_dataset` option. Default is true.
 shuffle_merged_datasets: true
+
+Deduplicates datasets and test_datasets with identical entries.
+dataset_exact_deduplication: true
 
 # A list of one or more datasets to eval the model with.
 # You can use either test_datasets, or val_set_size, but not both.
@@ -140,12 +207,27 @@ test_datasets:
 
 # use RL training: 'dpo', 'ipo', 'kto'
 rl:
+# whether to perform weighting if doing DPO training. Boolean.
+dpo_use_weighting:
 
-# Saves the desired chat template to the tokenizer_config.json for easier inferencing
-# Currently supports chatml and inst (mistral/mixtral)
-chat_template: chatml
-# Changes the default system message
-default_system_message: You are a helpful assistant. Please give a long and detailed answer. # Currently only supports chatml.
+# reward modelling: `True` or `False`
+reward_model:
+
+# process reward modelling: `True` or `False`
+process_reward_model:
+
+# The name of the chat template to use for training, following values are supported:
+# - tokenizer_default: Uses the chat template that is available in the tokenizer_config.json. If the chat template is not available in the tokenizer, it will raise an error. This is the default value.
+# - alpaca/inst/chatml/gemma/cohere/llama3/phi_3/deepseek_v2/jamba: These chat templates are available in the axolotl codebase at src/axolotl/utils/chat_templates.py
+# - tokenizer_default_fallback_*: where * is the name of the chat template to fallback to. E.g. tokenizer_default_fallback_chatml. This is useful when the chat template is not available in the tokenizer.
+# - jinja: Uses a custom jinja template for the chat template. The custom jinja template should be provided in the chat_template_jinja field.
+# The selected chat template will be saved to the tokenizer_config.json for easier inferencing
+# Note: It is recommended to set train_on_inputs to true when using a chat template that is different from the model's default chat template.
+chat_template: tokenizer_default
+# custom jinja template for chat template. This will be only used if chat_template is set to `jinja` or `null` (in which case chat_template is automatically set to `jinja`). Default is null.
+chat_template_jinja: null
+# Changes the default system message. Currently only supports chatml.
+default_system_message: You are a helpful assistant. Please give a long and detailed answer.
 # Axolotl attempts to save the dataset as an arrow after packing the data together so
 # subsequent training attempts load faster, relative path
 dataset_prepared_path: data/last_run_prepared
@@ -191,6 +273,11 @@ total_num_tokens:
 sample_packing_group_size: 100000
 # The number of samples which can be packed into one sequence. Increase if using a large sequence_len with many short samples.
 sample_packing_bin_size: 200
+# whether to concatenate samples during pretraining
+pretraining_sample_concatenation:
+
+# Use batch flattening for speedups when not using sample_packing
+batch_flattening:
 
 # Passed through to transformers when loading the model when launched without accelerate
 # Use `sequential` when training w/ model parallelism to limit memory
@@ -232,6 +319,13 @@ lora_modules_to_save:
 
 lora_fan_in_fan_out: false
 
+# Apply custom LoRA autograd functions and activation function Triton kernels for
+# speed and memory savings
+# See: https://axolotl-ai-cloud.github.io/axolotl/docs/lora_optims.html
+lora_mlp_kernel: true
+lora_qkv_kernel: true
+lora_o_kernel: true
+
 # LoRA+ hyperparameters
 # For more details about the following options, see:
 # https://arxiv.org/abs/2402.12354  and `src/axolotl/core/train_builder.py`
@@ -265,13 +359,30 @@ wandb_log_model: # "checkpoint" to log model to wandb Artifacts every `save_step
 # mlflow configuration if you're using it
 mlflow_tracking_uri: # URI to mlflow
 mlflow_experiment_name: # Your experiment name
+mlflow_run_name: # Your run name
 hf_mlflow_log_artifacts:  # set to true to copy each saved checkpoint on each save to mlflow artifact registry
+
+# Comet configuration if you're using it
+# Make sure your `COMET_API_KEY` environment variable is set (recommended) or you login to Comet with `comet login`.
+# Check out our documentation for more details https://www.comet.com/docs/v2/api-and-sdk/python-sdk/reference/Experiment-Creation/#comet_ml.start
+use_comet: # Enable or disable Comet integration.
+comet_api_key: # API key for Comet. Recommended to set via `comet login`.
+comet_workspace: # Workspace name in Comet. Defaults to the user's default workspace.
+comet_project_name: # Project name in Comet. Defaults to Uncategorized.
+comet_experiment_key: # Identifier for the experiment. Used to append data to an existing experiment or control the key of new experiments. Default to a random key.
+comet_mode: # Create a new experiment ("create") or log to an existing one ("get"). Default ("get_or_create") auto-selects based on configuration.
+comet_online: # Set to True to log data to Comet server, or False for offline storage. Default is True.
+comet_experiment_config: # Dictionary for additional configuration settings, see the doc for more details.
+
+# Tensorboard
+use_tensorboard: # Optional[bool]
 
 # Where to save the full-finetuned model to
 output_dir: ./completed-model
 
 # Whether to use torch.compile and which backend to use
-torch_compile:  # bool
+# setting to `auto` will enable torch compile when torch>=2.5.1
+torch_compile:  # Optional[Union[Literal["auto"], bool]]
 torch_compile_backend:  # Optional[str]
 
 # Training hyperparameters
@@ -288,10 +399,11 @@ warmup_ratio: 0.05  # cannot use with warmup_steps
 learning_rate: 0.00003
 lr_quadratic_warmup:
 logging_steps:
-eval_steps: # Leave empty to eval at each epoch, integers for every N steps. decimal for fraction of total steps
+eval_steps: # Leave empty to eval at each epoch, integer for every N steps. float for fraction of total steps
 evals_per_epoch: # number of times per epoch to run evals, mutually exclusive with eval_steps
-save_strategy: # Set to `"no"` to skip checkpoint saves
-save_steps: # Leave empty to save at each epoch
+eval_strategy: # Set to `"no"` to skip evaluation, `"epoch"` at end of each epoch, leave empty to infer from `eval_steps`.
+save_strategy: # Set to `"no"` to skip checkpoint saves, `"epoch"` at end of each epoch, `"best"` when better result is achieved, leave empty to infer from `save_steps`.
+save_steps: # Leave empty to save at each epoch, integer for every N steps. float for fraction of total steps
 saves_per_epoch: # number of times per epoch to save a checkpoint, mutually exclusive with save_steps
 save_total_limit: # Checkpoints saved at a time
 # Maximum number of iterations to train for. It precedes num_epochs which means that
@@ -299,9 +411,19 @@ save_total_limit: # Checkpoints saved at a time
 # e.g., when 1 epoch is 1000 steps => `num_epochs: 2` and `max_steps: 100` will train for 100 steps
 max_steps:
 
+# bool of whether to include tokens trainer per second in the training metrics. This iterates over the entire dataset once, so it takes some time.
+include_tokens_per_second: # Optional[bool]
+
+# whether to find batch size that fits in memory. Passed to underlying transformers Trainer
+auto_find_batch_size: # Optional[bool]
+
 eval_table_size: # Approximate number of predictions sent to wandb depending on batch size. Enabled above 0. Default is 0
 eval_max_new_tokens: # Total number of tokens generated for predictions sent to wandb. Default is 128
-eval_causal_lm_metrics: # HF evaluate metrics used during evaluation. Default is ["sacrebleu", "comet", "ter", chrf]
+eval_causal_lm_metrics: # HF evaluate metrics used during evaluation. Default is ["sacrebleu", "comet", "ter", "chrf", "perplexity"]
+
+profiler_steps: # enable the pytorch profiler to capture the first N steps of training to the output_dir.
+                # see https://pytorch.org/blog/understanding-gpu-memory-1/ for more information
+                # snapshots can be visualized @ https://pytorch.org/memory_viz
 
 loss_watchdog_threshold: # High loss value, indicating the learning has broken down (a good estimate is ~2 times the loss at the start of training)
 loss_watchdog_patience: # Number of high-loss steps in a row before the trainer aborts (default: 3)
@@ -327,7 +449,7 @@ gradient_checkpointing: false
 early_stopping_patience: 3
 
 # Specify a scheduler and kwargs to use with the optimizer
-lr_scheduler: # 'one_cycle' | 'log_sweep' | empty for cosine
+lr_scheduler: # 'one_cycle' | 'rex' | 'log_sweep' | empty for cosine
 lr_scheduler_kwargs:
 cosine_min_lr_ratio: # decay lr to some percentage of the peak lr, e.g. cosine_min_lr_ratio=0.1 for 10% of peak lr
 cosine_constant_lr_ratio: # freeze lr at some percentage of the step, e.g. cosine_constant_lr_ratio=0.8 means start cosine_min_lr at 80% of training step (https://arxiv.org/pdf/2308.04014.pdf)
@@ -349,6 +471,7 @@ lr_div_factor: # Learning rate div factor
 # - adamw_torch_fused
 # - adamw_torch_xla
 # - adamw_apex_fused
+# - adopt_adamw (an EXPERIMENTAL optimizer, only for torch version >= 2.5.1)
 # - adafactor
 # - adamw_anyprecision
 # - sgd
@@ -409,6 +532,8 @@ flash_attn_fuse_mlp: # Whether to fuse part of the MLP into a single operation
 sdp_attention:
 # Shifted-sparse attention (only llama) - https://arxiv.org/pdf/2309.12307.pdf
 s2_attention:
+# Optional[bool]. Whether to use low_cpu_mem_usage
+low_cpu_mem_usage:
 # Resume from a specific checkpoint dir
 resume_from_checkpoint:
 # If resume_from_checkpoint isn't set and you simply want it to start where it left off.
@@ -428,6 +553,13 @@ special_tokens:
 
 # Add extra tokens.
 tokens:
+
+# Mapping token_id to new_token_string to override reserved added_tokens in the tokenizer.
+# Only works for tokens that are not part of the base vocab (aka are added_tokens).
+# Can be checked if they exist in tokenizer.json added_tokens.
+added_tokens_overrides:  # Dict[int, str]
+#  128041: "<|im_start|>"
+#  128042: "<|im_end|>"
 
 # FSDP
 fsdp:

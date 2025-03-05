@@ -4,12 +4,13 @@ Multipack Batch Sampler
 """
 import logging
 import math
-import os
 from typing import Any, Iterable, List, Union
 
 import numba
 import numpy as np
 from torch.utils.data import BatchSampler, Sampler
+
+from axolotl.utils.distributed import reduce_and_broadcast
 
 LOG = logging.getLogger("axolotl.utils.samplers.multipack")
 
@@ -115,6 +116,7 @@ class MultipackBatchSampler(BatchSampler):
         lengths: np.ndarray,
         packing_efficiency_estimate: float = 1.0,
         drop_last: bool = False,
+        num_count_samples: int = 16,
         **kwargs,
     ):
         super().__init__(sampler, batch_size, drop_last)
@@ -130,6 +132,11 @@ class MultipackBatchSampler(BatchSampler):
         # statistics
         self.eff_total_used = 0
         self.eff_total_slots = 0
+
+        # The number of times to calculate the batches to determine the minimum packed dataset length for the local rank
+        self.num_count_samples = num_count_samples
+        # the minimum packed dataset length across all ranks determined by a gather/broadcast
+        self.len_across_ranks = None
 
     def set_epoch(self, epoch: int):
         self.epoch = epoch
@@ -165,6 +172,9 @@ class MultipackBatchSampler(BatchSampler):
 
     def __iter__(self):
         batches = self.generate_batches(set_stats=True)
+        if self.len_across_ranks:
+            # make sure the batches we iterate over is truncated to the same min length across all ranks
+            batches = batches[: self.len_across_ranks]
         return iter(batches)
 
     def num_batches(self):
@@ -174,30 +184,32 @@ class MultipackBatchSampler(BatchSampler):
     def efficiency(self):
         return self.eff_total_used / self.eff_total_slots
 
+    def gather_efficiency(self):
+        def calc_sample_packing_eff_est(estimates: List[float]):
+            LOG.debug(f"sample_packing_eff_est across ranks: {repr(estimates)}")
+            return math.floor(0.997 * max(estimates))
+
+        sample_packing_actual_eff_all = reduce_and_broadcast(
+            lambda: self.efficiency(),  # pylint: disable=unnecessary-lambda
+            calc_sample_packing_eff_est,
+        )
+        sample_packing_eff_est = (
+            math.ceil(sample_packing_actual_eff_all * 200.0) / 200.0
+        )
+        return sample_packing_eff_est
+
+    def gather_len_batches(self, num):
+        def calc_min_len(estimates: list[(int, float)]):
+            LOG.info(f"gather_len_batches: {repr(estimates)}")
+            return math.floor(min(estimates))
+
+        min_len_batches = reduce_and_broadcast(lambda: num, calc_min_len)
+        return min_len_batches
+
     def __len__(self):
-        self.num_batches()
-        return self._len_est()
-
-    def _len_est(self):
-        world_size = int(os.getenv("WORLD_SIZE", "1"))
-        lengths_sum = np.sum(self.lengths)
-        lengths_sum_per_device = lengths_sum // world_size
-        LOG.info(
-            f"packing_efficiency_estimate: {self.packing_efficiency_estimate} "
-            f"total_num_tokens per device: {lengths_sum_per_device}"
-        )
-
-        # shave off 1% + 1 for dealing with variance in packing from random sampler to sampler
-        return max(
-            0,
-            (
-                world_size
-                * math.floor(
-                    0.99
-                    * lengths_sum_per_device
-                    / self.packing_efficiency_estimate
-                    // (self.batch_max_len * self.batch_size)
-                )
-                - 1
-            ),
-        )
+        if not self.len_across_ranks:
+            len_batches = min(
+                [self.num_batches() for _ in range(self.num_count_samples)]
+            )
+            self.len_across_ranks = self.gather_len_batches(len_batches)
+        return self.len_across_ranks

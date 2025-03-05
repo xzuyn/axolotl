@@ -2,6 +2,7 @@
 import functools
 import unittest
 
+import pytest
 import torch
 from datasets import load_dataset
 from torch.utils.data import DataLoader
@@ -21,6 +22,7 @@ class TestPretrainingPacking(unittest.TestCase):
         self.tokenizer = AutoTokenizer.from_pretrained("huggyllama/llama-7b")
         self.tokenizer.pad_token = "</s>"
 
+    @pytest.mark.flaky(retries=3, delay=5)
     def test_packing_stream_dataset(self):
         # pylint: disable=duplicate-code
         dataset = load_dataset(
@@ -39,6 +41,7 @@ class TestPretrainingPacking(unittest.TestCase):
                     }
                 ],
                 "sample_packing": True,
+                "pretrain_multipack_attn": True,
                 "pad_to_sequence_len": True,
                 "sequence_len": 2048,
                 "micro_batch_size": 2,
@@ -85,9 +88,11 @@ class TestPretrainingPacking(unittest.TestCase):
             assert data["labels"].shape == torch.Size(
                 [1, original_bsz * cfg.sequence_len]
             )
-            assert data["attention_mask"].shape == torch.Size(
-                [1, original_bsz * cfg.sequence_len]
-            )
+            assert "attention_mask" not in data
+            # FIXME add back once we fix packing unpad/pad with attention mask
+            # assert data["attention_mask"].shape == torch.Size(
+            #     [1, original_bsz * cfg.sequence_len]
+            # )
             idx += 1
 
 

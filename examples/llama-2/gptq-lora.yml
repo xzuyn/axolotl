@@ -1,8 +1,13 @@
 base_model: TheBloke/Llama-2-7B-GPTQ
-gptq: true
-gptq_disable_exllama: true
+# optionally might have model_type or tokenizer_type
 model_type: AutoModelForCausalLM
 tokenizer_type: LlamaTokenizer
+# Automatically upload checkpoint and final model to HF
+# hub_model_id: username/custom_model_name
+
+gptq: true
+gptq_disable_exllama: true
+
 tokenizer_use_fast: true
 tokenizer_legacy: true
 load_in_8bit: false
@@ -37,7 +42,7 @@ output_dir: ./outputs/model-out
 gradient_accumulation_steps: 1
 micro_batch_size: 1
 num_epochs: 4
-optimizer: adamw_torch
+optimizer: adamw_torch_fused
 adam_beta2: 0.95
 adam_eps: 0.00001
 max_grad_norm: 1.0

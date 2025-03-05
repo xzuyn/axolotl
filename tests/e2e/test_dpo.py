@@ -9,13 +9,13 @@ from pathlib import Path
 
 import pytest
 
-from axolotl.cli import load_rl_datasets
-from axolotl.common.cli import TrainerCliArgs
+from axolotl.cli.args import TrainerCliArgs
+from axolotl.common.datasets import load_preference_datasets
 from axolotl.train import train
-from axolotl.utils.config import normalize_config
+from axolotl.utils.config import normalize_config, validate_config
 from axolotl.utils.dict import DictDefault
 
-from .utils import with_temp_dir
+from .utils import check_model_output_exists, with_temp_dir
 
 LOG = logging.getLogger("axolotl.tests.e2e")
 os.environ["WANDB_DISABLED"] = "true"
@@ -63,12 +63,14 @@ class TestDPOLlamaLora(unittest.TestCase):
                 "gradient_checkpointing_kwargs": {"use_reentrant": True},
             }
         )
+
+        cfg = validate_config(cfg)
         normalize_config(cfg)
         cli_args = TrainerCliArgs()
-        dataset_meta = load_rl_datasets(cfg=cfg, cli_args=cli_args)
+        dataset_meta = load_preference_datasets(cfg=cfg, cli_args=cli_args)
 
-        train(cfg=cfg, cli_args=cli_args, dataset_meta=dataset_meta)
-        assert (Path(temp_dir) / "checkpoint-20/adapter_model.safetensors").exists()
+        train(cfg=cfg, dataset_meta=dataset_meta)
+        check_model_output_exists(Path(temp_dir) / "checkpoint-20", cfg)
 
     @with_temp_dir
     def test_dpo_nll_lora(self, temp_dir):
@@ -108,12 +110,61 @@ class TestDPOLlamaLora(unittest.TestCase):
                 "gradient_checkpointing_kwargs": {"use_reentrant": True},
             }
         )
+
+        cfg = validate_config(cfg)
         normalize_config(cfg)
         cli_args = TrainerCliArgs()
-        dataset_meta = load_rl_datasets(cfg=cfg, cli_args=cli_args)
+        dataset_meta = load_preference_datasets(cfg=cfg, cli_args=cli_args)
 
-        train(cfg=cfg, cli_args=cli_args, dataset_meta=dataset_meta)
-        assert (Path(temp_dir) / "checkpoint-20/adapter_model.safetensors").exists()
+        train(cfg=cfg, dataset_meta=dataset_meta)
+        check_model_output_exists(Path(temp_dir) / "checkpoint-20", cfg)
+
+    @with_temp_dir
+    def test_dpo_use_weighting(self, temp_dir):
+        # pylint: disable=duplicate-code
+        cfg = DictDefault(
+            {
+                "base_model": "JackFram/llama-68m",
+                "tokenizer_type": "LlamaTokenizer",
+                "sequence_len": 1024,
+                "load_in_8bit": True,
+                "adapter": "lora",
+                "lora_r": 64,
+                "lora_alpha": 32,
+                "lora_dropout": 0.1,
+                "lora_target_linear": True,
+                "special_tokens": {},
+                "rl": "dpo",
+                "dpo_use_weighting": True,
+                "datasets": [
+                    {
+                        "path": "arcee-ai/distilabel-intel-orca-dpo-pairs-binarized",
+                        "type": "chatml.ultra",
+                        "split": "train",
+                    },
+                ],
+                "num_epochs": 1,
+                "micro_batch_size": 4,
+                "gradient_accumulation_steps": 1,
+                "output_dir": temp_dir,
+                "learning_rate": 0.00001,
+                "optimizer": "paged_adamw_8bit",
+                "lr_scheduler": "cosine",
+                "max_steps": 20,
+                "save_steps": 10,
+                "warmup_steps": 5,
+                "gradient_checkpointing": True,
+                "gradient_checkpointing_kwargs": {"use_reentrant": True},
+            }
+        )
+
+        cfg = validate_config(cfg)
+        normalize_config(cfg)
+        cli_args = TrainerCliArgs()
+        dataset_meta = load_preference_datasets(cfg=cfg, cli_args=cli_args)
+
+        train(cfg=cfg, dataset_meta=dataset_meta)
+        check_model_output_exists(Path(temp_dir) / "checkpoint-20", cfg)
 
     @pytest.mark.skip("kto_pair no longer supported in trl")
     @with_temp_dir
@@ -153,12 +204,14 @@ class TestDPOLlamaLora(unittest.TestCase):
                 "gradient_checkpointing_kwargs": {"use_reentrant": True},
             }
         )
+
+        cfg = validate_config(cfg)
         normalize_config(cfg)
         cli_args = TrainerCliArgs()
-        dataset_meta = load_rl_datasets(cfg=cfg, cli_args=cli_args)
+        dataset_meta = load_preference_datasets(cfg=cfg, cli_args=cli_args)
 
-        train(cfg=cfg, cli_args=cli_args, dataset_meta=dataset_meta)
-        assert (Path(temp_dir) / "checkpoint-20/adapter_model.safetensors").exists()
+        train(cfg=cfg, dataset_meta=dataset_meta)
+        check_model_output_exists(Path(temp_dir) / "checkpoint-20", cfg)
 
     @with_temp_dir
     def test_ipo_lora(self, temp_dir):
@@ -197,12 +250,14 @@ class TestDPOLlamaLora(unittest.TestCase):
                 "gradient_checkpointing_kwargs": {"use_reentrant": True},
             }
         )
+
+        cfg = validate_config(cfg)
         normalize_config(cfg)
         cli_args = TrainerCliArgs()
-        dataset_meta = load_rl_datasets(cfg=cfg, cli_args=cli_args)
+        dataset_meta = load_preference_datasets(cfg=cfg, cli_args=cli_args)
 
-        train(cfg=cfg, cli_args=cli_args, dataset_meta=dataset_meta)
-        assert (Path(temp_dir) / "checkpoint-20/adapter_model.safetensors").exists()
+        train(cfg=cfg, dataset_meta=dataset_meta)
+        check_model_output_exists(Path(temp_dir) / "checkpoint-20", cfg)
 
     @with_temp_dir
     def test_orpo_lora(self, temp_dir):
@@ -244,12 +299,14 @@ class TestDPOLlamaLora(unittest.TestCase):
                 "gradient_checkpointing_kwargs": {"use_reentrant": True},
             }
         )
+
+        cfg = validate_config(cfg)
         normalize_config(cfg)
         cli_args = TrainerCliArgs()
-        dataset_meta = load_rl_datasets(cfg=cfg, cli_args=cli_args)
+        dataset_meta = load_preference_datasets(cfg=cfg, cli_args=cli_args)
 
-        train(cfg=cfg, cli_args=cli_args, dataset_meta=dataset_meta)
-        assert (Path(temp_dir) / "checkpoint-20/adapter_model.safetensors").exists()
+        train(cfg=cfg, dataset_meta=dataset_meta)
+        check_model_output_exists(Path(temp_dir) / "checkpoint-20", cfg)
 
     @pytest.mark.skip(reason="Fix the implementation")
     @with_temp_dir
@@ -308,9 +365,11 @@ class TestDPOLlamaLora(unittest.TestCase):
                 "gradient_checkpointing_kwargs": {"use_reentrant": True},
             }
         )
+
+        cfg = validate_config(cfg)
         normalize_config(cfg)
         cli_args = TrainerCliArgs()
-        dataset_meta = load_rl_datasets(cfg=cfg, cli_args=cli_args)
+        dataset_meta = load_preference_datasets(cfg=cfg, cli_args=cli_args)
 
-        train(cfg=cfg, cli_args=cli_args, dataset_meta=dataset_meta)
-        assert (Path(temp_dir) / "checkpoint-20/adapter_model.safetensors").exists()
+        train(cfg=cfg, dataset_meta=dataset_meta)
+        check_model_output_exists(Path(temp_dir) / "checkpoint-20", cfg)

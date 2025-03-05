@@ -5,15 +5,14 @@ E2E tests for falcon
 import logging
 import os
 import unittest
-from pathlib import Path
 
-from axolotl.cli import load_datasets
-from axolotl.common.cli import TrainerCliArgs
+from axolotl.cli.args import TrainerCliArgs
+from axolotl.common.datasets import load_datasets
 from axolotl.train import train
 from axolotl.utils.config import normalize_config
 from axolotl.utils.dict import DictDefault
 
-from ..utils import with_temp_dir
+from ..utils import check_model_output_exists, with_temp_dir
 
 LOG = logging.getLogger("axolotl.tests.e2e")
 os.environ["WANDB_DISABLED"] = "true"
@@ -40,7 +39,7 @@ class TestFalconPatched(unittest.TestCase):
                 "lora_dropout": 0.1,
                 "lora_target_linear": True,
                 "lora_modules_to_save": ["word_embeddings", "lm_head"],
-                "val_set_size": 0.1,
+                "val_set_size": 0.05,
                 "special_tokens": {
                     "bos_token": "<|endoftext|>",
                     "pad_token": "<|endoftext|>",
@@ -68,8 +67,8 @@ class TestFalconPatched(unittest.TestCase):
         cli_args = TrainerCliArgs()
         dataset_meta = load_datasets(cfg=cfg, cli_args=cli_args)
 
-        train(cfg=cfg, cli_args=cli_args, dataset_meta=dataset_meta)
-        assert (Path(temp_dir) / "adapter_model.bin").exists()
+        train(cfg=cfg, dataset_meta=dataset_meta)
+        check_model_output_exists(temp_dir, cfg)
 
     @with_temp_dir
     def test_ft(self, temp_dir):
@@ -80,7 +79,7 @@ class TestFalconPatched(unittest.TestCase):
                 "flash_attention": True,
                 "sample_packing": True,
                 "sequence_len": 2048,
-                "val_set_size": 0.1,
+                "val_set_size": 0.05,
                 "special_tokens": {
                     "bos_token": "<|endoftext|>",
                     "pad_token": "<|endoftext|>",
@@ -108,5 +107,5 @@ class TestFalconPatched(unittest.TestCase):
         cli_args = TrainerCliArgs()
         dataset_meta = load_datasets(cfg=cfg, cli_args=cli_args)
 
-        train(cfg=cfg, cli_args=cli_args, dataset_meta=dataset_meta)
-        assert (Path(temp_dir) / "pytorch_model.bin").exists()
+        train(cfg=cfg, dataset_meta=dataset_meta)
+        check_model_output_exists(temp_dir, cfg)

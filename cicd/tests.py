@@ -1,6 +1,6 @@
-"""
- modal application to run axolotl gpu tests in Modal
- """
+"""Modal app to run axolotl GPU tests"""
+# pylint: disable=duplicate-code
+
 import os
 import pathlib
 import tempfile
@@ -8,7 +8,7 @@ import tempfile
 import jinja2
 import modal
 from jinja2 import select_autoescape
-from modal import Image, Stub
+from modal import App, Image
 
 cicd_path = pathlib.Path(__file__).parent.resolve()
 
@@ -21,11 +21,13 @@ df_template = template_env.get_template("Dockerfile.jinja")
 df_args = {
     "AXOLOTL_EXTRAS": os.environ.get("AXOLOTL_EXTRAS", ""),
     "AXOLOTL_ARGS": os.environ.get("AXOLOTL_ARGS", ""),
-    "PYTORCH_VERSION": os.environ.get("PYTORCH_VERSION", "2.0.1"),
-    "BASE_TAG": os.environ.get("BASE_TAG", "main-base-py3.10-cu118-2.0.1"),
-    "CUDA": os.environ.get("CUDA", "118"),
+    "PYTORCH_VERSION": os.environ.get("PYTORCH_VERSION", "2.4.1"),
+    "BASE_TAG": os.environ.get("BASE_TAG", "main-base-py3.11-cu121-2.4.1"),
+    "CUDA": os.environ.get("CUDA", "121"),
     "GITHUB_REF": os.environ.get("GITHUB_REF", "refs/heads/main"),
     "GITHUB_SHA": os.environ.get("GITHUB_SHA", ""),
+    "NIGHTLY_BUILD": os.environ.get("NIGHTLY_BUILD", ""),
+    "HF_HOME": "/workspace/data/huggingface-cache/hub",
 }
 
 dockerfile_contents = df_template.render(**df_args)
@@ -34,21 +36,24 @@ temp_dir = tempfile.mkdtemp()
 with open(pathlib.Path(temp_dir) / "Dockerfile", "w", encoding="utf-8") as f:
     f.write(dockerfile_contents)
 
-cicd_image = (
-    Image.from_dockerfile(
-        pathlib.Path(temp_dir) / "Dockerfile",
-        force_build=True,
-        gpu="A10G",
-    )
-    .env(df_args)
-    .pip_install("fastapi==0.110.0", "pydantic==2.6.3")
+cicd_image = Image.from_dockerfile(
+    pathlib.Path(temp_dir) / "Dockerfile",
+    context_mount=None,
+    force_build=True,
+    gpu="A10G",
+).env(df_args)
+
+app = App("Axolotl CI/CD", secrets=[])
+
+hf_cache_volume = modal.Volume.from_name(
+    "axolotl-ci-hf-hub-cache", create_if_missing=True
 )
-
-stub = Stub("Axolotl CI/CD", secrets=[])
-
+VOLUME_CONFIG = {
+    "/workspace/data/huggingface-cache/hub": hf_cache_volume,
+}
 
 N_GPUS = int(os.environ.get("N_GPUS", 1))
-GPU_CONFIG = modal.gpu.A10G(count=N_GPUS)
+GPU_CONFIG = modal.gpu.L40S(count=N_GPUS)
 
 
 def run_cmd(cmd: str, run_folder: str):
@@ -59,17 +64,18 @@ def run_cmd(cmd: str, run_folder: str):
         exit(exit_code)  # pylint: disable=consider-using-sys-exit
 
 
-@stub.function(
+@app.function(
     image=cicd_image,
     gpu=GPU_CONFIG,
-    timeout=45 * 60,
+    timeout=60 * 60,
     cpu=8.0,
     memory=131072,
+    volumes=VOLUME_CONFIG,
 )
 def cicd_pytest():
     run_cmd("./cicd/cicd.sh", "/workspace/axolotl")
 
 
-@stub.local_entrypoint()
+@app.local_entrypoint()
 def main():
     cicd_pytest.remote()

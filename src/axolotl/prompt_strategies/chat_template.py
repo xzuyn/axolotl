@@ -3,11 +3,17 @@ HF Chat Templates prompt strategy
 """
 
 import logging
-from typing import Any, Dict, List, Optional
+from collections import defaultdict
+from typing import Any, Dict, List, Optional, Set, Union
 
+from pydantic import BaseModel
+from transformers import ProcessorMixin
+
+from axolotl.prompt_strategies.jinja_template_analyzer import JinjaTemplateAnalyzer
 from axolotl.prompt_tokenizers import PromptTokenizingStrategy
 from axolotl.prompters import IGNORE_TOKEN_ID, Prompter
-from axolotl.utils.chat_templates import chat_templates
+from axolotl.utils.chat_templates import get_chat_template_from_config
+from axolotl.utils.config.models.input.v0_4_1 import DatasetConfig
 
 # Configure the logger
 LOG = logging.getLogger("axolotl")
@@ -20,15 +26,23 @@ class ChatTemplatePrompter(Prompter):
     def __init__(
         self,
         tokenizer,
-        chat_template=None,
+        chat_template: str,
+        processor=None,
         max_length=2048,
-        message_field_role: str = "from",
-        message_field_content: str = "value",
-        message_field_training: str = "train",
-        message_field_training_detail: str = "train_detail",
+        message_property_mappings: Optional[Dict[str, str]] = None,
+        message_field_training: Optional[str] = None,
+        message_field_training_detail: Optional[str] = None,
+        field_messages: str = "messages",
         roles: Optional[Dict[str, List[str]]] = None,
         drop_system_message: bool = False,
     ):
+        # check if message_property_mappings is None or empty dict
+        if message_property_mappings is None or (not message_property_mappings):
+            message_property_mappings = {
+                "role": "role",
+                "content": "content",
+            }
+
         if roles:
             self.roles = {s: t for t, sources in roles.items() for s in sources}
         else:
@@ -38,33 +52,52 @@ class ChatTemplatePrompter(Prompter):
                 "assistant": "assistant",
                 "gpt": "assistant",
                 "system": "system",
+                "tool": "tool",
             }
-        self.message_field_role = message_field_role
-        self.message_field_content = message_field_content
+
+        self._chat_template_msg_variables = self.get_chat_template_msg_variables(
+            chat_template, field_messages
+        )
+        self.message_property_mappings = message_property_mappings
         self.message_field_training = message_field_training
         self.message_field_training_detail = message_field_training_detail
+        self.field_messages = field_messages
         self.tokenizer = tokenizer
+        self.processor: Optional[ProcessorMixin] = processor
         self.chat_template = chat_template
         self.max_length = max_length
         self.drop_system_message = drop_system_message
 
-    def build_prompt(self, conversation, add_generation_prompt=False):
-        turns = [
-            {
-                "role": self.roles[t[self.message_field_role]],
-                "content": t[self.message_field_content],
-                "training": t.get(self.message_field_training, None),
-            }
-            for t in conversation
-        ]
+    @property
+    def chat_template_msg_variables(self) -> Set[str]:
+        return self._chat_template_msg_variables
 
-        if self.drop_system_message and turns[0]["role"] == "system":
-            turns = turns[1:]
+    def build_prompt(self, conversation, add_generation_prompt=False, images=None):
+        if self.processor:
+            if not callable(self.processor):
+                raise TypeError("Processor must be callable")
+
+            text = self.processor.apply_chat_template(
+                conversation,
+                chat_template=self.chat_template,
+                tokenize=False,
+                add_generation_prompt=add_generation_prompt,
+            )
+            batch = self.processor(
+                text=text,
+                images=images,
+                return_tensors="pt",
+            )
+            # workaround since processor works in batches instead of single examples
+            for k, val in batch.items():
+                if k in ["pixel_values"]:
+                    batch[k] = val.tolist()
+                else:
+                    batch[k] = val.squeeze().tolist()
+            return batch
 
         return self.tokenizer.apply_chat_template(
-            turns,
-            truncation=True,
-            max_length=self.max_length,
+            conversation,
             add_generation_prompt=add_generation_prompt,
             chat_template=self.chat_template,
         )
@@ -171,70 +204,149 @@ class ChatTemplatePrompter(Prompter):
 
         return adjusted_details
 
+    def get_chat_template_msg_variables(
+        self, chat_template: str, field_messages: str
+    ) -> Set[str]:
+        template_analyzer = JinjaTemplateAnalyzer(chat_template)
+        return template_analyzer.get_message_vars(field_messages)
+
 
 class ChatTemplateStrategy(PromptTokenizingStrategy):
     """
     Tokenizing strategy for instruction-based prompts.
     """
 
-    _messages = "conversations"
-
     def __init__(
         self,
-        prompter,
+        prompter: "ChatTemplatePrompter",
         tokenizer,
         train_on_inputs,
         sequence_len,
         roles_to_train=None,
-        train_on_eos="last",
+        train_on_eos=None,
     ):
         super().__init__(prompter, tokenizer, train_on_inputs, sequence_len)
-        self.roles_to_train = roles_to_train if roles_to_train is not None else []
+        self.prompter: ChatTemplatePrompter = prompter
+
+        self.roles_to_train = []
+        if roles_to_train:
+            # map roles if exist in prompter.roles else use the role as is
+            self.roles_to_train = [
+                prompter.roles.get(role, role) for role in roles_to_train
+            ]
+
         self.train_on_eos = train_on_eos
+        self.images = "images"
+
+        LOG.debug(
+            f"The chat template uses the following properites on the message: {self.prompter.chat_template_msg_variables}"
+        )
 
     @property
-    def messages(self):
-        return self._messages
+    def supports_batched(self) -> bool:
+        # Let calling code know we can handle lists of examples
+        return True
 
-    @messages.setter
-    def messages(self, messages):
-        self._messages = messages
+    def is_prompt_batched(self, prompt: dict[str, Any]) -> bool:
+        try:
+            return all(isinstance(v, list) for v in prompt.values()) and all(
+                isinstance(v, list) for v in prompt[self.prompter.field_messages]
+            )
+        except KeyError:
+            return False
 
-    def tokenize_prompt(self, prompt):
-        turns = prompt[self.messages]
-        input_ids = self.prompter.build_prompt(turns)
+    def tokenize_prompt(self, prompt: dict[str, Any]):
+        """
+        Public method that can handle either a single prompt or a batch of prompts.
+        """
+
+        if not self.is_prompt_batched(prompt) or not self.supports_batched:
+            return self._tokenize_single_prompt(prompt)
+
+        res = defaultdict(lambda: [])
+        feature_names = list(prompt.keys())
+
+        # Process each prompt individually
+        for row in zip(*prompt.values()):
+            tokenized_prompt = self._tokenize_single_prompt(
+                dict(zip(feature_names, row))
+            )
+            for key, val in tokenized_prompt.items():
+                res[key].append(val)
+
+        # If there are no examples left, return an empty dictionary
+        if not res:
+            return {}
+
+        return dict(res)
+
+    def _tokenize_single_prompt(self, prompt: dict) -> Dict[str, List[int]]:
+        # Old simple legacy behavior that works reliably.
+        if (
+            not self.roles_to_train
+            and not self.train_on_eos
+            and not self.prompter.message_field_training  # type: ignore
+            and not self.prompter.message_field_training_detail  # type: ignore
+        ):
+            turns = self.get_conversation_thread(prompt)
+            images = self.get_images(prompt)
+            prompt_ids = self.prompter.build_prompt(  # type: ignore
+                turns[:-1],
+                add_generation_prompt=True,
+                images=images,
+            )
+            tokenized_res = self.prompter.build_prompt(turns, images=images)  # type: ignore
+            tokenized_prompt = {}
+            if isinstance(tokenized_res, list):
+                input_ids = prompt_ids + tokenized_res[len(prompt_ids) :]
+                tokenized_prompt["input_ids"] = input_ids
+                tokenized_prompt["attention_mask"] = [1] * len(input_ids)
+            else:
+                input_ids = tokenized_res["input_ids"]
+                tokenized_prompt = tokenized_res
+
+            if not self.train_on_inputs:
+                user_prompt_len = len(prompt_ids)
+                labels = [-100] * user_prompt_len + input_ids[user_prompt_len:]
+            else:
+                labels = input_ids
+
+            tokenized_prompt["labels"] = labels
+
+            return tokenized_prompt
+
+        turns = self.get_conversation_thread(prompt)
+        input_ids = self.prompter.build_prompt(turns)  # type: ignore
         labels = [IGNORE_TOKEN_ID] * len(input_ids)
 
         last_eos_idx = -1
         for index, turn in enumerate(turns):
-            role = turn.get(self.prompter.message_field_role)
-            content = turn.get(self.prompter.message_field_content)
-            train_turn = turn.get(self.prompter.message_field_training)
-            train_detail = turn.get(self.prompter.message_field_training_detail)
+            role = turn.get("role")
+            content = turn.get("content")
+            train_turn = turn.get("training")
+            train_detail = turn.get("training_detail")
 
             LOG.debug(
                 f"Processing turn {index}: role={role}, content={content}, train_turn={train_turn}, train_detail={train_detail}"
             )
 
-            should_train = (
-                train_turn
-                if train_turn is not None
-                else bool(train_detail is not None)
-                if train_detail is not None
-                else self.train_on_inputs or role in self.roles_to_train
-            )
+            should_train = None
+            if train_turn is not None:
+                should_train = train_turn
+            elif train_detail is not None:
+                should_train = bool(train_detail)
+            else:
+                should_train = self.train_on_inputs or role in self.roles_to_train
 
             LOG.debug(f"Should train: {should_train}")
 
-            turn_start_idx, turn_end_idx = self.find_turn(
-                conversation_ids=input_ids, turn=index, turn_content=turn
-            )
+            turn_start_idx, turn_end_idx = self.find_turn(turns=turns, turn_idx=index)
 
             LOG.debug(f"Turn indices: start={turn_start_idx}, end={turn_end_idx}")
 
             if should_train and turn_start_idx != -1 and turn_end_idx != -1:
                 if train_detail:
-                    token_offsets = self.prompter.get_offsets_for_train_detail(
+                    token_offsets = self.prompter.get_offsets_for_train_detail(  # type: ignore
                         content, train_detail
                     )
                     LOG.debug(f"Token offsets: {token_offsets}")
@@ -250,13 +362,15 @@ class ChatTemplateStrategy(PromptTokenizingStrategy):
                     labels[turn_start_idx:turn_end_idx] = input_ids[
                         turn_start_idx:turn_end_idx
                     ]
-                    LOG.debug(f"Labels set for range {turn_start_idx}:{turn_end_idx}")
+                    LOG.debug(
+                        f"Set labels for training from {turn_start_idx} to {turn_end_idx}"
+                    )
 
                 LOG.debug(f"Labels after processing turn {index}: {labels}")
 
             # Handle EOS token
-            eos_idx = self.find_eos_token(input_ids, turn_end_idx)
-            if eos_idx == turn_end_idx:
+            eos_idx = self.find_first_eos_token(input_ids, start_idx=turn_end_idx)
+            if abs(eos_idx - turn_end_idx) <= 3:  # Allow for some template padding
                 last_eos_idx = eos_idx
                 if self.train_on_eos == "all" or (
                     self.train_on_eos == "turn" and should_train
@@ -281,89 +395,214 @@ class ChatTemplateStrategy(PromptTokenizingStrategy):
             "attention_mask": [1] * len(input_ids),
         }
 
-    def find_eos_token(self, input_ids, start_idx):
+    def find_first_eos_token(self, input_ids, start_idx):
         eos_token_id = self.tokenizer.eos_token_id
         for i in range(start_idx, len(input_ids)):
             if input_ids[i] == eos_token_id:
                 return i
         return -1
 
-    def find_turn(self, conversation_ids, turn, turn_content):
+    def find_turn(self, turns: list[dict], turn_idx: int):
         """
         Locate the starting and ending indices of the specified turn in a conversation.
-
-        Args:
-            conversation_ids (list[int]): Token IDs representing the conversation.
-            turn (int): The turn number to locate (based on EOS tokens).
-            turn_content (str): String containing the content of the turn.
-
-        Returns:
-            tuple: (start_idx, end_idx) indices of the start and end of the turn content.
-                   Returns (-1, -1) if the turn content is not found.
         """
-        content = turn_content.get(self.prompter.message_field_content, "")
-        content_ids = self.tokenizer.encode(content, add_special_tokens=False)
+        # pylint: disable=too-many-return-statements
 
-        eos_token_id = self.tokenizer.eos_token_id
-        eos_count = 0
-        start_search_idx = 0
+        if turn_idx >= len(turns):
+            raise ValueError(f"Turn index {turn_idx} out of range")
 
-        # Locate the starting index after the specified number of EOS tokens
-        for i, token_id in enumerate(conversation_ids):
-            if token_id == eos_token_id:
-                eos_count += 1
-                if eos_count == turn:
-                    start_search_idx = (
-                        i + 1
-                    )  # Start searching after the specified turn's EOS token
-                    break
+        # mistral does not output message if it contains only system message
+        if (
+            turn_idx == 0
+            and turns[0].get("role") == "system"
+            and "mistral" in self.tokenizer.name_or_path.lower()
+        ):
+            return -1, -1
 
-        # Find the start index of the content within the conversation
-        start_idx = -1
-        for i in range(start_search_idx, len(conversation_ids) - len(content_ids) + 1):
-            if conversation_ids[i : i + len(content_ids)] == content_ids:
+        empty_turn = {
+            "role": turns[turn_idx].get("role"),
+            "content": "[[dummy_message]]",
+        }
+
+        # Create conversation versions
+        turns_with_empty = turns[:turn_idx] + [empty_turn]
+        turns_with_content = turns[: turn_idx + 1]
+
+        # Generate the conversation up to the turn, with final turn replaced with dummy content
+        dummy_ids = self.prompter.build_prompt(turns_with_empty)  # type: ignore
+
+        # Generate the conversation up to the turn, with final turn included
+        full_ids = self.prompter.build_prompt(turns_with_content)  # type: ignore
+
+        if not full_ids or not dummy_ids:
+            LOG.warning(f"Empty template generated for turn {turn_idx}")
+            return -1, -1
+
+        # Find first difference (start of content)
+        start_idx = None
+        min_len = min(len(dummy_ids), len(full_ids))
+        for i in range(min_len):
+            if dummy_ids[i] != full_ids[i]:
                 start_idx = i
                 break
 
-        if start_idx != -1:
-            end_idx = start_idx + len(content_ids)
-        else:
-            end_idx = -1
+        if start_idx is None:
+            LOG.warning(f"Could not find content start boundary for turn {turn_idx}")
+            return -1, -1
+
+        # Find last difference (end of content)
+        end_idx = None
+        for i in range(min_len):
+            dummy_pos = len(dummy_ids) - 1 - i
+            full_pos = len(full_ids) - 1 - i
+            if dummy_ids[dummy_pos] != full_ids[full_pos]:
+                end_idx = full_pos + 1  # Add one to include the last token when slice
+                break
+
+        if end_idx is None:
+            LOG.warning(f"Could not find content end boundary for turn {turn_idx}")
+            return -1, -1
+
+        if end_idx < start_idx:
+            LOG.warning(
+                f"Content end boundary is before start boundary for turn {turn_idx}"
+            )
+            return -1, -1
+
+        if end_idx == start_idx:
+            LOG.warning(
+                f"Content end boundary is the same as start boundary for turn {turn_idx}. This is likely an empty turn."
+            )
+            return -1, -1
+
+        LOG.debug(f"Content boundaries: {start_idx}, {end_idx}")
+        LOG.debug(
+            f"Content tokens: {self.tokenizer.convert_ids_to_tokens(full_ids[start_idx:end_idx])}"
+        )
 
         return start_idx, end_idx
 
     def get_conversation_thread(self, prompt):
-        return prompt[self.messages]
+        turns = []
+        for message in prompt[self.prompter.field_messages]:
+            transformed_message = self.transform_message(message)
+
+            turn = {
+                **transformed_message,
+                "training": message.get(self.prompter.message_field_training),
+                "training_detail": message.get(
+                    self.prompter.message_field_training_detail
+                ),
+            }
+
+            turns.append(turn)
+
+        if self.prompter.drop_system_message and turns[0]["role"] == "system":
+            turns = turns[1:]
+
+        return turns
+
+    def transform_message(self, message):
+        # Build the initial transformed message from the mappings
+        transformed_message = {}
+        for key, value in self.prompter.message_property_mappings.items():
+            if message.get(value) is not None:
+                transformed_message[key] = message[value]
+            else:
+                LOG.debug(
+                    f"Could not find value for property {value} in message: {message}"
+                )
+
+        # Map the role if necessary
+        if "role" in transformed_message:
+            transformed_message["role"] = self.prompter.roles.get(
+                transformed_message["role"], transformed_message["role"]
+            )
+
+        # Determine which keys in the original message were not mapped
+        mapped_values = set(self.prompter.message_property_mappings.values())
+        remaining_keys = set(message) - mapped_values
+
+        # Keep only the properties defined in the chat template
+        # and not already mapped
+        for key in self.prompter.chat_template_msg_variables:
+            if key in remaining_keys:
+                val = message.get(key)
+                if val is not None:
+                    transformed_message[key] = val
+
+        return transformed_message
+
+    def get_images(self, prompt):
+        return prompt.get(self.images, None)
 
 
-def load(tokenizer, cfg, ds_cfg: Optional[Dict[str, Any]] = None):
-    ds_cfg = ds_cfg or {}
+class StrategyLoader:
+    """
+    Load chat template strategy based on configuration.
+    """
 
-    prompter_params = {
-        "tokenizer": tokenizer,
-        "chat_template": chat_templates(ds_cfg.get("chat_template", "chatml")),
-        "message_field_role": ds_cfg.get("message_field_role", "from"),
-        "message_field_content": ds_cfg.get("message_field_content", "value"),
-        "message_field_training": ds_cfg.get("message_field_training", "training"),
-        "message_field_training_detail": ds_cfg.get(
-            "message_field_training_detail", "train_detail"
-        ),
-        "roles": ds_cfg.get("roles"),
-        "drop_system_message": ds_cfg.get("drop_system_message", False),
-    }
+    def _get_strategy_cls(self):
+        return ChatTemplateStrategy
 
-    strategy_params = {
-        "train_on_inputs": cfg.train_on_inputs,
-        "sequence_len": cfg.sequence_len,
-        "roles_to_train": ds_cfg.get("roles_to_train", ["gpt", "assistant"]),
-        "train_on_eos": ds_cfg.get("train_on_eos", "last"),
-    }
+    def _get_strategy_params(self, cfg, ds_cfg: Dict[str, Any]):
+        return {
+            "train_on_inputs": cfg.train_on_inputs,
+            "sequence_len": cfg.sequence_len,
+            "roles_to_train": ds_cfg.get("roles_to_train", ["assistant"]),
+            "train_on_eos": ds_cfg.get("train_on_eos", "turn"),
+        }
 
-    strategy = ChatTemplateStrategy(
-        ChatTemplatePrompter(**prompter_params), tokenizer=tokenizer, **strategy_params
-    )
+    def __call__(
+        self,
+        tokenizer,
+        cfg,
+        ds_cfg: Optional[Union[Dict[str, Any], DatasetConfig]] = None,
+        processor=None,
+    ):
+        if ds_cfg is None:
+            dataset_config = {}
+        elif isinstance(ds_cfg, BaseModel):
+            dataset_config = ds_cfg.model_dump()
+        else:
+            dataset_config = ds_cfg
 
-    if "field_messages" in ds_cfg and hasattr(strategy, "messages"):
-        strategy.messages = ds_cfg["field_messages"]
+        chat_template_string = get_chat_template_from_config(
+            cfg=cfg, ds_cfg=dataset_config, tokenizer=tokenizer
+        )
+        LOG.info(f"Using chat template:\n---\n{chat_template_string!s}\n---")
 
-    return strategy
+        prompter_params = {
+            "tokenizer": tokenizer,
+            "chat_template": chat_template_string,
+            "message_property_mappings": dataset_config.get(
+                "message_property_mappings", {}
+            ),
+            "message_field_training": dataset_config.get(
+                "message_field_training", None
+            ),
+            "message_field_training_detail": dataset_config.get(
+                "message_field_training_detail",
+                None,
+            ),
+            "field_messages": dataset_config.get("field_messages", "messages"),
+            "roles": dataset_config.get("roles"),
+            "drop_system_message": dataset_config.get("drop_system_message", False),
+            # we need to add one for detecting sequences with exceeding the `sequence_len` limit.
+            "max_length": cfg.sequence_len + 1,
+            "processor": processor,
+        }
+
+        strategy_params = self._get_strategy_params(cfg, dataset_config)
+        strategy_cls = self._get_strategy_cls()
+
+        strategy = strategy_cls(
+            ChatTemplatePrompter(**prompter_params),
+            tokenizer=tokenizer,
+            **strategy_params,
+        )
+
+        return strategy
+
+
+load = StrategyLoader()

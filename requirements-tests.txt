@@ -1,2 +1,5 @@
 pytest
 pytest-xdist
+pytest-retry
+pytest-sugar
+tbparse

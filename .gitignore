@@ -1,6 +1,7 @@
 **/axolotl.egg-info
 configs
 last_run_prepared/
+outputs
 .vscode
 _site/
 
@@ -182,3 +183,6 @@ submit.sh
 
 typings/
 out/
+
+# vim
+*.swp

@@ -1,4 +1,5 @@
 """Module containing the Trainer class and related functions"""
+
 import json
 import math
 import os
@@ -11,12 +12,13 @@ import numpy as np
 import torch
 import torch.cuda
 from accelerate.logging import get_logger
-from datasets import set_caching_enabled
+from datasets import IterableDataset, disable_caching, enable_caching
 from torch.utils.data import DataLoader, RandomSampler
 from transformers.utils import is_torch_bf16_gpu_available
 
 from axolotl.core.trainer_builder import HFCausalTrainerBuilder, HFRLTrainerBuilder
-from axolotl.utils.distributed import is_main_process, reduce_and_broadcast, zero_first
+from axolotl.utils.distributed import reduce_and_broadcast
+from axolotl.utils.environment import check_cuda_p2p_ib_support
 from axolotl.utils.samplers import MultipackBatchSampler, get_dataset_lengths
 
 LOG = get_logger("axolotl")
@@ -87,16 +89,48 @@ def trainer_weighted_loss(model_output, labels, shift_labels=True):
 @contextmanager
 def disable_datasets_caching():
     try:
-        set_caching_enabled(False)
+        disable_caching()
         yield
     finally:
-        set_caching_enabled(True)
+        enable_caching()
 
 
 def add_position_ids(sample):
-    sample_len = len(sample["input_ids"])
-    sample["position_ids"] = torch.arange(len(sample["input_ids"]))
-    sample["length"] = sample_len
+    """
+    Handle both single-example and batched data.
+    - single example: sample['input_ids'] is a list[int]
+    - batched data: sample['input_ids'] is a list[list[int]]
+    """
+    # Return sample unchanged if "input_ids" is not present, or is empty
+    if "input_ids" not in sample or not sample["input_ids"]:
+        return sample
+
+    input_ids = sample["input_ids"]
+
+    # If first element is an int, it’s a single example
+    # If first element is a list, it’s a batch
+    if isinstance(input_ids[0], int):
+        # ---- SINGLE EXAMPLE ----
+        seq_len = len(input_ids)
+        # Position IDs for a single example
+        # As a list
+        sample["position_ids"] = list(range(seq_len))
+        sample["length"] = seq_len
+
+    else:
+        # ---- BATCHED EXAMPLES ----
+        # input_ids is a list of lists
+        position_ids_batch = []
+        lengths_batch = []
+        for seq in input_ids:
+            seq_len = len(seq)
+            position_ids_batch.append(list(range(seq_len)))
+            lengths_batch.append(seq_len)
+
+        # Now store them back
+        sample["position_ids"] = position_ids_batch
+        sample["length"] = lengths_batch
+
     return sample
 
 
@@ -171,128 +205,199 @@ def add_length(sample):
 
 
 def drop_long_seq(sample, sequence_len=2048, min_sequence_len=2):
-    return (
-        len(sample["input_ids"]) <= sequence_len
-        and len(sample["input_ids"]) >= min_sequence_len
-    )
+    """
+    Drop samples whose sequence length is either too long (> sequence_len)
+    or too short (< min_sequence_len).
+
+    Works for both single-example (list[int]) or batched (list[list[int]]).
+    """
+    min_sequence_len = min_sequence_len or 2
+
+    input_ids = sample["input_ids"]
+
+    # Edge case: if input_ids is empty
+    if not input_ids:
+        # Decide if you want to drop or keep empty. Let's drop.
+        return False
+
+    # Check if single example or batched by looking at the first element
+    if isinstance(input_ids[0], int):
+        # Single example (input_ids is a list of int)
+        length = len(input_ids)
+        return min_sequence_len <= length <= sequence_len
+
+    # Batched (input_ids is a list of lists)
+    results = []
+    for seq in input_ids:
+        length = len(seq)
+        results.append(min_sequence_len <= length <= sequence_len)
+    return results
 
 
 def process_datasets_for_packing(cfg, train_dataset, eval_dataset):
-    drop_long = partial(
-        drop_long_seq,
-        sequence_len=cfg.sequence_len,
-        min_sequence_len=cfg.min_sample_len or 2,
+    if cfg.model_config_type == "mamba":
+        LOG.info("dropping attention_mask column")
+        train_dataset = train_dataset.remove_columns("attention_mask")
+        if eval_dataset:
+            eval_dataset = eval_dataset.remove_columns("attention_mask")
+
+    if cfg.model_config_type in ["falcon", "mistral"]:
+        LOG.info("dropping token_type_ids column if it exists")
+        if "token_type_ids" in train_dataset.column_names:
+            train_dataset = train_dataset.remove_columns("token_type_ids")
+        if eval_dataset and "token_type_ids" in eval_dataset.column_names:
+            eval_dataset = eval_dataset.remove_columns("token_type_ids")
+
+    def drop_no_trainable_tokens(sample):
+        """
+        Drop samples if all labels are -100 (i.e., zero trainable tokens).
+        Works for both single-example or batched input.
+        """
+        labels = sample["labels"]
+        if not labels:
+            return True
+
+        # Check if single example or batch
+        # If first element is an int, we assume a single example
+        # If it's a list, we assume we're dealing with a batch
+        if isinstance(labels[0], int):
+            # Single example: return a single bool
+            return np.any(labels != -100)
+
+        # Batched: 'labels' is a list of lists
+        # Return a list of booleans, one per sub-list
+        results = [np.any(row_labels != -100) for row_labels in labels]
+        return results
+
+    try:
+        prior_len = len(train_dataset)
+    except TypeError:
+        # handle iterable datasets case
+        prior_len = None
+    filter_map_kwargs = {}
+    if not isinstance(train_dataset, IterableDataset):
+        filter_map_kwargs["num_proc"] = cfg.dataset_processes
+        filter_map_kwargs["load_from_cache_file"] = not cfg.is_preprocess
+
+    drop_long_kwargs = {}
+    if filter_map_kwargs:
+        drop_long_kwargs["desc"] = "Drop Samples with Zero Trainable Tokens"
+    train_dataset = train_dataset.filter(
+        drop_no_trainable_tokens,
+        batched=True,
+        **filter_map_kwargs,
+        **drop_long_kwargs,
     )
-    with zero_first(is_main_process()):
-        if cfg.is_preprocess:
-            min_input_len = np.min(get_dataset_lengths(train_dataset))
-            LOG.debug(f"min_input_len: {min_input_len}", main_process_only=True)
-            max_input_len = np.max(get_dataset_lengths(train_dataset))
-            LOG.debug(f"max_input_len: {max_input_len}", main_process_only=True)
+    if prior_len:
+        dropped = prior_len - len(train_dataset)
+        if dropped:
+            LOG.warning(
+                f"Dropped {dropped} samples with no trainable tokens from train dataset"
+            )
 
-        if cfg.model_config_type == "mamba":
-            LOG.info("dropping attention_mask column")
-            train_dataset = train_dataset.remove_columns("attention_mask")
-            if eval_dataset:
-                eval_dataset = eval_dataset.remove_columns("attention_mask")
+    if eval_dataset:
+        try:
+            prior_len = len(eval_dataset)
+        except TypeError:
+            # handle iterable datasets case
+            prior_len = None
+        eval_dataset = eval_dataset.filter(
+            drop_no_trainable_tokens,
+            **filter_map_kwargs,
+            **drop_long_kwargs,
+        )
+        if prior_len:
+            dropped = prior_len - len(eval_dataset)
+            if dropped:
+                LOG.warning(
+                    f"Dropped {dropped} samples with no trainable tokens from eval dataset"
+                )
 
-        if cfg.model_config_type == "falcon":
-            LOG.info("dropping token_type_ids column if it exists")
-            if "token_type_ids" in train_dataset.column_names:
-                train_dataset = train_dataset.remove_columns("token_type_ids")
-            if eval_dataset and "token_type_ids" in eval_dataset.column_names:
-                eval_dataset = eval_dataset.remove_columns("token_type_ids")
-
-        train_dataset = train_dataset.filter(
-            drop_long,
+    if cfg.group_by_length:
+        train_dataset = train_dataset.map(
+            add_length,
             num_proc=cfg.dataset_processes,
             load_from_cache_file=not cfg.is_preprocess,
-            desc="Dropping Long Sequences",
+            desc="Group By Length",
         )
-        if eval_dataset:
-            eval_dataset = eval_dataset.filter(
-                drop_long,
-                num_proc=cfg.dataset_processes,
-                load_from_cache_file=not cfg.is_preprocess,
-                desc="Dropping Long Sequences",
-            )
 
-        if cfg.group_by_length:
-            train_dataset = train_dataset.map(
-                add_length,
-                num_proc=cfg.dataset_processes,
-                load_from_cache_file=not cfg.is_preprocess,
-                desc="Group By Length",
-            )
-
-        if cfg.use_pose:
-            pose_kwargs = {}
-            if cfg.pose_num_chunks is not None:
-                pose_kwargs["chunks"] = cfg.pose_num_chunks
-            pose_fn = partial(
-                add_pose_position_ids,
-                max_context_len=cfg.pose_max_context_len,
-                split_on_token_ids=cfg.pose_split_on_token_ids,
-                **pose_kwargs,
-            )
-            train_dataset = train_dataset.map(
-                pose_fn,
-                num_proc=cfg.dataset_processes,
-                load_from_cache_file=not cfg.is_preprocess,
-                desc="Add position_id column (PoSE)",
-            )
-            train_dataset = train_dataset.sort("sequence_len")
-            if cfg.eval_sample_packing is not False:
-                if eval_dataset:
-                    eval_dataset = eval_dataset.map(
-                        pose_fn,
-                        num_proc=cfg.dataset_processes,
-                        load_from_cache_file=not cfg.is_preprocess,
-                        desc="Add position_id column (PoSE)",
-                    )
-        elif cfg.sample_packing:
-            train_dataset = train_dataset.map(
-                add_position_ids,
-                num_proc=cfg.dataset_processes,
-                load_from_cache_file=not cfg.is_preprocess,
-                desc="Add position_id column (Sample Packing)",
-            )
-            if cfg.eval_sample_packing is not False:
-                if eval_dataset:
-                    eval_dataset = eval_dataset.map(
-                        add_position_ids,
-                        num_proc=cfg.dataset_processes,
-                        load_from_cache_file=not cfg.is_preprocess,
-                        desc="Add position_id column (Sample Packing)",
-                    )
+    if cfg.use_pose:
+        pose_kwargs = {}
+        if cfg.pose_num_chunks is not None:
+            pose_kwargs["chunks"] = cfg.pose_num_chunks
+        pose_fn = partial(
+            add_pose_position_ids,
+            max_context_len=cfg.pose_max_context_len,
+            split_on_token_ids=cfg.pose_split_on_token_ids,
+            **pose_kwargs,
+        )
+        train_dataset = train_dataset.map(
+            pose_fn,
+            num_proc=cfg.dataset_processes,
+            load_from_cache_file=not cfg.is_preprocess,
+            desc="Add position_id column (PoSE)",
+        )
+        train_dataset = train_dataset.sort("sequence_len")
+        if cfg.eval_sample_packing is not False:
+            if eval_dataset:
+                eval_dataset = eval_dataset.map(
+                    pose_fn,
+                    num_proc=cfg.dataset_processes,
+                    load_from_cache_file=not cfg.is_preprocess,
+                    desc="Add position_id column (PoSE)",
+                )
+    elif cfg.sample_packing:
+        drop_long_kwargs = {}
+        if filter_map_kwargs:
+            drop_long_kwargs["desc"] = "Add position_id column (Sample Packing)"
+        train_dataset = train_dataset.map(
+            add_position_ids,
+            batched=True,
+            **filter_map_kwargs,
+            **drop_long_kwargs,
+        )
+        if cfg.eval_sample_packing is not False:
+            if eval_dataset:
+                eval_dataset = eval_dataset.map(
+                    add_position_ids,
+                    **filter_map_kwargs,
+                    **drop_long_kwargs,
+                )
 
     return train_dataset, eval_dataset
 
 
 def process_pretraining_datasets_for_packing(
-    train_dataset, sequence_len, skip_position_ids=True
+    train_dataset, sequence_len, skip_position_ids=True, drop_attention_mask=False
 ):
     drop_long = partial(drop_long_seq, sequence_len=sequence_len)
 
     train_dataset = train_dataset.filter(
         drop_long,
         desc="Dropping Long Sequences",
+        load_from_cache_file=False,
     )
-    if skip_position_ids:
+    if not skip_position_ids:
         train_dataset = train_dataset.map(
             add_position_ids,
             desc="Add position_id column (Pretraining Sample Packing)",
         )
+    if drop_attention_mask:
+        train_dataset = train_dataset.remove_columns("attention_mask")
 
     return train_dataset
 
 
 def calculate_total_num_steps(cfg, train_dataset, update=True):
-    if not cfg.total_num_tokens:
+    if (
+        not cfg.total_num_tokens
+        and not cfg.skip_prepare_dataset
+        and not cfg.reward_model
+    ):
         total_num_tokens = np.sum(
-            train_dataset.data.column("input_ids")
-            .to_pandas()
-            .apply(lambda x: len(x))  # pylint: disable=unnecessary-lambda
+            train_dataset.select_columns("input_ids")
+            .to_pandas()["input_ids"]
+            .apply(len)
             .values
         )
         LOG.debug(f"total_num_tokens: {total_num_tokens:_}", main_process_only=True)
@@ -301,7 +406,12 @@ def calculate_total_num_steps(cfg, train_dataset, update=True):
 
     skip_estimates = cfg.model_config_type == "mamba"
 
-    if not skip_estimates and not cfg.total_supervised_tokens:
+    if (
+        not skip_estimates
+        and not cfg.total_supervised_tokens
+        and not cfg.skip_prepare_dataset
+        and not cfg.reward_model
+    ):
         total_supervised_tokens = (
             train_dataset.data.column("labels")
             .to_pandas()
@@ -322,7 +432,7 @@ def calculate_total_num_steps(cfg, train_dataset, update=True):
         if cfg.sample_packing_eff_est:
             total_num_steps = (
                 # match count to len est in dataloader
-                (
+                int(
                     math.floor(
                         0.99
                         * cfg.total_num_tokens
@@ -339,7 +449,7 @@ def calculate_total_num_steps(cfg, train_dataset, update=True):
                 main_process_only=True,
             )
         else:
-            if cfg.flash_attention:
+            if cfg.flash_attention and not cfg.multipack_real_batches:
                 sampler_batch_size = 1
                 batch_max_len = cfg.micro_batch_size * cfg.sequence_len
             else:
@@ -390,13 +500,25 @@ def calculate_total_num_steps(cfg, train_dataset, update=True):
     return total_num_steps
 
 
+def setup_torch_compile_env(cfg):
+    if cfg.torch_compile:
+        if not cfg.torch_compile_backend:
+            os.environ["ACCELERATE_DYNAMO_BACKEND"] = "INDUCTOR"
+        else:
+            os.environ["ACCELERATE_DYNAMO_BACKEND"] = cfg.torch_compile_backend.upper()
+
+
 def setup_deepspeed_env(cfg, stage=None):
+    from transformers.integrations.deepspeed import HfTrainerDeepSpeedConfig
+
     os.environ["ACCELERATE_USE_DEEPSPEED"] = "true"
     os.environ["ACCELERATE_DEEPSPEED_CONFIG_FILE"] = cfg.deepspeed
     if stage:
         os.environ["ACCELERATE_DEEPSPEED_ZERO_STAGE"] = str(stage)
         if stage == 3:
             os.environ["ACCELERATE_DEEPSPEED_ZERO3_INIT"] = "true"
+    # If we don't assign this, it doesn't actually get set in the accelerate weakref
+    _ = HfTrainerDeepSpeedConfig(cfg.deepspeed)
 
 
 def setup_fsdp_envs(cfg):
@@ -422,6 +544,9 @@ def setup_fsdp_envs(cfg):
 
 
 def prepare_optim_env(cfg):
+    if not check_cuda_p2p_ib_support():
+        if os.getenv("NCCL_P2P_DISABLE") is None:
+            os.environ["NCCL_P2P_DISABLE"] = "1"
     if cfg.fsdp:
         setup_fsdp_envs(cfg)
     elif cfg.deepspeed:
@@ -433,6 +558,8 @@ def prepare_optim_env(cfg):
                 deepspeed_config = json.load(fin)
             stage = deepspeed_config.get("zero_optimization", {}).get("stage", None)
         setup_deepspeed_env(cfg, stage=stage)
+
+    setup_torch_compile_env(cfg)
 
     if (cfg.bf16 == "auto" and is_torch_bf16_gpu_available()) or cfg.bf16 is True:
         os.environ["ACCELERATE_MIXED_PRECISION"] = "bf16"
@@ -446,13 +573,41 @@ def prepare_opinionated_env(cfg):
         os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
 
-def setup_trainer(cfg, train_dataset, eval_dataset, model, tokenizer, total_num_steps):
-    if cfg.rl in ["dpo", "ipo", "orpo", "kto", "simpo"]:
-        trainer_builder = HFRLTrainerBuilder(cfg, model[0], tokenizer)
-        trainer_builder.model_ref = model[1]
-        trainer_builder.peft_config = model[2]
+def setup_trainer(
+    cfg,
+    train_dataset,
+    eval_dataset,
+    model,
+    tokenizer,
+    processor,
+    total_num_steps,
+    model_ref=None,
+    peft_config=None,
+):
+    """
+    Helper method for instantiating and building a (causal or RLHF) trainer.
+
+    Args:
+        cfg: Axolotl config object containing training parameters.
+        train_dataset: Dataset to use for training.
+        eval_dataset: Dataset to use for evaluation.
+        model: The model to train.
+        tokenizer: Tokenizer for processing text input.
+        processor: Processor for data preparation.
+        total_num_steps: The total number of training steps.
+        model_ref: Optional reference model for RLHF training. Default is None.
+        peft_config: Optional PEFT (Parameter-Efficient Fine-Tuning) configuration. Default is None.
+
+    Returns:
+        A trainer instance (either `HFRLTrainer` or `HFCausalTrainer`) configured based
+            on the provided parameters.
+    """
+    if cfg.rl:
+        trainer_builder = HFRLTrainerBuilder(cfg, model, tokenizer, processor)
+        trainer_builder.model_ref = model_ref
+        trainer_builder.peft_config = peft_config
     else:
-        trainer_builder = HFCausalTrainerBuilder(cfg, model[0], tokenizer)
+        trainer_builder = HFCausalTrainerBuilder(cfg, model, tokenizer, processor)
 
     trainer_builder.train_dataset = train_dataset
     trainer_builder.eval_dataset = eval_dataset

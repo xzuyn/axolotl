@@ -1,6 +1,9 @@
 base_model: meta-llama/Meta-Llama-3-8B-Instruct
+# optionally might have model_type or tokenizer_type
 model_type: LlamaForCausalLM
 tokenizer_type: AutoTokenizer
+# Automatically upload checkpoint and final model to HF
+# hub_model_id: username/custom_model_name
 
 load_in_8bit: true
 load_in_4bit: false
@@ -11,12 +14,12 @@ rl: dpo
 datasets:
   - path: fozziethebeat/alpaca_messages_2k_dpo_test
     type: chat_template.default
-    chat_template: llama3
     field_messages: conversation
     field_chosen: chosen
     field_rejected: rejected
-    message_field_role: role
-    message_field_content: content
+    message_property_mappings:
+      role: role
+      content: content
     roles:
       system:
         - system

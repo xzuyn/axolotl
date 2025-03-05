@@ -44,11 +44,12 @@ def magnitude_pruning_(tensor, prune_ratio):
 def reset_optimizer(
     optimizer: torch.optim.Optimizer,
     *,
-    reset_params: list[str],  # where str is the key to a torch.nn.Parameter
-    optimizer_state_keys: list[str],
-    prune_ratio: float = 0.9,
+    reset_params: List[str],  # where str is the key to a torch.nn.Parameter
+    optimizer_state_keys: List[str],
+    optimizer_magnitude_pruning: float = 0.9,
 ):
-    pruning_fn = partial(magnitude_pruning_, prune_ratio=prune_ratio)
+    # pylint:disable=unused-argument
+    pruning_fn = partial(magnitude_pruning_, prune_ratio=optimizer_magnitude_pruning)
     n_zeros = 0
     n_total = 0
 
@@ -56,16 +57,22 @@ def reset_optimizer(
     if isinstance(optimizer, ZeroRedundancyOptimizer):
         optimizer_state = optimizer.optim.state
 
-    for param in reset_params:
-        param_state = optimizer_state[param]
-        if len(param_state) == 0:  # no state for this param, happens for ZeRo optimizer
-            continue
-        for key in optimizer_state_keys:
-            pruning_fn(
-                param_state[key]
-            )  # pruning fn has to be inplace to keep the same keys in the dict
-            n_total += param_state[key].numel()
-            n_zeros += torch.sum(param_state[key] == 0).item()
+    for group in optimizer.param_groups:
+        for param in group["params"]:
+            state = optimizer_state[param]
+            for key, value in state.items():
+                if key not in optimizer_state_keys:
+                    continue
+                if torch.is_tensor(value):
+                    try:
+                        pruning_fn(value)
+                        n_total += value.numel()
+                        n_zeros += torch.sum(value == 0).item()
+                    except RuntimeError as exc:
+                        if "quantile() input tensor is too large" in str(exc):
+                            pass
+                        else:
+                            raise exc
 
     _zeroed = n_zeros / (1e-7 + n_total) * 100
     LOG.info(f"Percent of optimizer states zeroed: {_zeroed:.2f}")
@@ -120,6 +127,8 @@ class ReLoRACallback(TrainerCallback):
         optimizer: torch.optim.Optimizer,
         **_kwargs,
     ):
+        if not optimizer:
+            optimizer = state.optimizer
         if state.global_step > 0 and state.global_step % self.relora_steps == 0:
             checkpoint_folder = os.path.join(
                 args.output_dir,
@@ -129,6 +138,9 @@ class ReLoRACallback(TrainerCallback):
 
             if "adam" in args.optim.lower():
                 optimizer_state_keys = ["exp_avg", "exp_avg_sq"]
+                if "8bit" in args.optim.lower():
+                    optimizer_state_keys.append("state1")
+                    optimizer_state_keys.append("state2")
             else:
                 raise ValueError(f"Optimizer {args.optim} not supported with ReLoRA")
 
@@ -160,7 +172,7 @@ class ReLoRACallback(TrainerCallback):
                     optimizer,
                     reset_params=lora_params,
                     optimizer_state_keys=optimizer_state_keys,
-                    prune_ratio=args.relora_prune_ratio,
+                    optimizer_magnitude_pruning=args.relora_prune_ratio,
                 )
 
             if self.quantized:
