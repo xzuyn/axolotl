@@ -3,7 +3,6 @@
 # Import necessary modules and functions
 import re
 import ftfy
-import copy
 import logging
 
 # Import from axolotl package
