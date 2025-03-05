@@ -331,9 +331,9 @@ class CustomChatMLPromptTokenizingStrategy(PromptTokenizingStrategy):
 
             # Add missing EOS token to tokenized_text
             if tokenized_text["input_ids"][-1] != self.tokenizer.eos_token_id and (i == len(prompt[conversation_name]) - 1):
-                tokenized_text["input_ids"].append(self.tokenizer.eos_token_id)
+                for key in ["input_ids", "labels"]:
+                    tokenized_text[key].append(self.tokenizer.eos_token_id)
                 tokenized_text["attention_mask"].append(1)
-                tokenized_text["labels"].append(self.tokenizer.eos_token_id)
 
             input_ids += tokenized_text["input_ids"]
             attention_mask += tokenized_text["attention_mask"]
