@@ -75,7 +75,7 @@ class CustomChatMLPromptTokenizingStrategy(PromptTokenizingStrategy):
             tokenized_text = self.tokenizer(
                 text=(
                     f"{'\n' if i != 0 else ''}<|im_start|>{role_name}\n"
-                    f"{sharegpt_value.strip()}<|im_end|>"
+                    f"{ftfy.fix_text(sharegpt_value.strip())}<|im_end|>"
                 ),
                 truncation=False,
                 padding=False,
