@@ -100,19 +100,11 @@ class CustomChatMLPromptTokenizingStrategy(PromptTokenizingStrategy):
             ]
 
             # Handle masked user turn
-            if self.train_on_inputs is False and (
-                sharegpt_from == "system"
-                or sharegpt_from == "human"
-                or sharegpt_from == "human-chat"
-            ):
+            if self.train_on_inputs is False and sharegpt_from in ["system", "human", "human-chat"]:
                 tokenized_text["attention_mask"] = [0] * len(tokenized_text["attention_mask"])
                 tokenized_text["labels"] = [IGNORE_TOKEN_ID] * len(tokenized_text["input_ids"])
             # Handle partially masked model turn
-            elif self.train_on_inputs is False and (
-                sharegpt_from == "gpt"
-                or sharegpt_from == "gpt-chat"
-                or sharegpt_from == "thought"
-            ):
+            elif self.train_on_inputs is False and sharegpt_from in ["gpt", "gpt-chat", "thought"]:
                 tokenized_text["attention_mask"] = (
                     [0] * len(prefix["attention_mask"])  # Mask the prefix
                     + tokenized_text["attention_mask"][len(prefix["attention_mask"]):]
