@@ -338,7 +338,7 @@ class CustomChatMLPromptTokenizingStrategy(PromptTokenizingStrategy):
             "attention_mask": attention_mask,
             "labels": [
                 label if mask == 1 else IGNORE_TOKEN_ID
-                for label, mask in zip(tokenized_text["input_ids"], tokenized_text["attention_mask"])
+                for label, mask in zip(input_ids, attention_mask)
             ]
         }
 
