@@ -279,7 +279,7 @@ class CustomCompletionPromptTokenizingStrategy(PromptTokenizingStrategy):
             tokenized_text["attention_mask"].insert(0, 0)
 
         # Add missing EOS token
-        if input_ids[-1] != self.tokenizer.eos_token_id:
+        if tokenized_text["input_ids"][-1] != self.tokenizer.eos_token_id:
             tokenized_text["input_ids"].append(self.tokenizer.eos_token_id)
             tokenized_text["attention_mask"].append(1)
 
