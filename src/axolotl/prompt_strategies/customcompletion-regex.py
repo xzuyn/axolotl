@@ -232,10 +232,10 @@ REGEX_PATTERNS = [
 COMPILED_REGEX_PATTERNS = [re.compile(pattern) for pattern in REGEX_PATTERNS]
 
 
-def mask_regex_attention_tokenizer(tokenizer, text, compiled_regex_patterns):
+def mask_regex_attention_tokenizer(tokenizer, text, compiled_regex_patterns, add_special_tokens=False):
     tokenized_text = tokenizer(
         text=text,
-        add_special_tokens=False,
+        add_special_tokens=add_special_tokens,
         truncation=False,
         padding=False,
         return_tensors=None,
@@ -271,6 +271,7 @@ class CustomCompletionPromptTokenizingStrategy(PromptTokenizingStrategy):
             tokenizer=self.tokenizer,
             text=ftfy.fix_text(prompt[self.field].strip()),
             compiled_regex_patterns=COMPILED_REGEX_PATTERNS,
+            add_special_tokens=True,
         )
 
         # Add missing BOS token
