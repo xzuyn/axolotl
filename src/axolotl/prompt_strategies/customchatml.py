@@ -36,7 +36,6 @@ class CustomChatMLPromptTokenizingStrategy(PromptTokenizingStrategy):
             exit()
 
         # Iterate over each conversation turn in the prompt
-        num_turns = len(prompt[conversation_name])
         input_ids, attention_mask, labels = [], [], []
         for i, turn in enumerate(prompt[conversation_name]):
             # Get correct roles and messages
@@ -76,22 +75,11 @@ class CustomChatMLPromptTokenizingStrategy(PromptTokenizingStrategy):
                     f"{'\n' if i != 0 else ''}<|im_start|>{role_name}\n"
                     f"{ftfy.fix_text(sharegpt_value.strip())}<|im_end|>"
                 ),
+                add_special_tokens=False,
                 truncation=False,
                 padding=False,
                 return_tensors=None,
-                return_offsets_mapping=True,
             )
-
-            # Strip unwanted BOS token from prefix and tokenized_text
-            if self.tokenizer.bos_token_id and prefix["input_ids"][0] == self.tokenizer.bos_token_id and (i != 0):
-                for key in ["input_ids", "attention_mask"]:
-                    tokenized_text[key] = tokenized_text[key][1:]
-                    prefix[key] = prefix[key][1:]
-
-            # Add missing EOS token to tokenized_text
-            if tokenized_text["input_ids"][-1] != self.tokenizer.eos_token_id and (i == len(prompt[conversation_name]) - 1)::
-                tokenized_text["input_ids"].append(self.tokenizer.eos_token_id)
-                tokenized_text["attention_mask"].append(1)
 
             # Get labels
             tokenized_text["labels"] = [
@@ -123,10 +111,6 @@ class CustomChatMLPromptTokenizingStrategy(PromptTokenizingStrategy):
             input_ids.insert(0, self.tokenizer.bos_token_id)
             attention_mask.insert(0, 0)
             labels.insert(0, IGNORE_TOKEN_ID)
-        # Mask unmasked BOS token
-        elif self.tokenizer.bos_token_id and input_ids[0] == self.tokenizer.bos_token_id:
-            attention_mask[0] = 0
-            labels[0] = IGNORE_TOKEN_ID
 
         # Add missing EOS token
         if input_ids[-1] != self.tokenizer.eos_token_id:
