@@ -82,25 +82,22 @@ class CustomChatMLPromptTokenizingStrategy(PromptTokenizingStrategy):
                 return_offsets_mapping=True,
             )
 
-            # Get labels
-            tokenized_text["labels"] = [
-                label if mask == 1 else IGNORE_TOKEN_ID
-                for label, mask in zip(tokenized_text["input_ids"], tokenized_text["attention_mask"])
-            ]
-
             # Strip unwanted BOS token from prefix and tokenized_text
             if self.tokenizer.bos_token_id and prefix["input_ids"][0] == self.tokenizer.bos_token_id and (i != 0):
-                prefix["input_ids"] = prefix["input_ids"][1:]
-                prefix["attention_mask"] = prefix["attention_mask"][1:]
-                tokenized_text["input_ids"] = tokenized_text["input_ids"][1:]
-                tokenized_text["attention_mask"] = tokenized_text["attention_mask"][1:]
-                tokenized_text["labels"] = tokenized_text["labels"][1:]
+                for key in ["input_ids", "attention_mask"]:
+                    tokenized_text[key] = tokenized_text[key][1:]
+                    prefix[key] = prefix[key][1:]
 
             # Add missing EOS token to tokenized_text
             if tokenized_text["input_ids"][-1] != self.tokenizer.eos_token_id and (i == num_turns - 1):
                 tokenized_text["input_ids"].append(self.tokenizer.eos_token_id)
                 tokenized_text["attention_mask"].append(1)
-                tokenized_text["labels"].append(self.tokenizer.eos_token_id)
+
+            # Get labels
+            tokenized_text["labels"] = [
+                label if mask == 1 else IGNORE_TOKEN_ID
+                for label, mask in zip(tokenized_text["input_ids"], tokenized_text["attention_mask"])
+            ]
 
             # Handle masked user turn
             if self.train_on_inputs is False and (
