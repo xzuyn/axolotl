@@ -231,48 +231,38 @@ REGEX_PATTERNS = [
 COMPILED_REGEX_PATTERNS = [re.compile(pattern) for pattern in REGEX_PATTERNS]
 
 
-def mask_regex_attention(
+def mask_regex_attention_tokenizer(
+    tokenizer,
     text: str,
-    input_ids: List[int],
-    attention_mask: List[int],
-    offset_mapping: List[Tuple[int, int]],
     compiled_regex_patterns: List[Pattern[str]]
 ) -> Dict[str, Union[List[int], List[Tuple[int, int]]]]:
     """
     Masks tokens in the attention_mask and corresponding labels based on regex matches in the text.
-
-    Parameters:
-        text (str): The original text.
-        input_ids (List[int]): The list of token IDs.
-        attention_mask (List[int]): Binary mask indicating which tokens are valid.
-        offset_mapping (List[Tuple[int, int]]): List of (start, end) indices for each token.
-        compiled_regex_patterns (List[Pattern[str]]): List of precompiled regex patterns.
-
-    Returns:
-        Dict[str, Union[List[int], List[Tuple[int, int]]]]:
-            - "input_ids" (List[int]): Unmodified token IDs.
-            - "attention_mask" (List[int]): Modified attention mask with masked tokens set to 0.
-            - "offset_mapping" (List[Tuple[int, int]]): Unmodified list of (start, end) indices for each token.
-            - "labels" (List[int]): Labels with masked tokens set to IGNORE_TOKEN_ID.
     """
 
-    # Validate input lengths
-    if not (len(input_ids) == len(attention_mask) == len(offset_mapping)):
-        raise ValueError("Length of input_ids, attention_mask, and offset_mapping must be the same.")
+    tokenized_text = tokenizer(
+        text=text,
+        truncation=False,
+        padding=False,
+        return_tensors=None,
+        return_offsets_mapping=True,
+    )
 
     # For each regex pattern, find all its occurrences in the text.
-    labels = [label if mask == 1 else IGNORE_TOKEN_ID for label, mask in zip(input_ids, attention_mask)]
+    tokenized_text["labels"] = [
+        label if mask == 1 else IGNORE_TOKEN_ID
+        for label, mask in zip(tokenized_text["input_ids"], tokenized_text["attention_mask"])
+    ]
     for pattern in compiled_regex_patterns:
         for match in pattern.finditer(text):
             found_index = match.start()
             end_index = match.end()
-
             # Check each token's character span; if it overlaps, mask it out.
-            for i, (token_start, token_end) in enumerate(offset_mapping):
+            for i, (token_start, token_end) in enumerate(tokenized_text["offset_mapping"]):
                 if token_start < end_index and token_end > found_index:
-                    attention_mask[i], labels[i] = 0, IGNORE_TOKEN_ID
+                    tokenized_text["attention_mask"][i], tokenized_text["labels"][i] = 0, IGNORE_TOKEN_ID
 
-    return {"input_ids": input_ids, "attention_mask": attention_mask, "offset_mapping": offset_mapping, "labels": labels}
+    return tokenized_text
 
 
 class CustomChatMLPromptTokenizingStrategy(PromptTokenizingStrategy):
@@ -321,65 +311,34 @@ class CustomChatMLPromptTokenizingStrategy(PromptTokenizingStrategy):
                 LOG.warning(f"'from' contains an unhandled string: {sharegpt_from}")
                 exit()
 
-            # Get tokens which will be masked out if using train_on_inputs: false
-            prefix = self.tokenizer(
-                text=f"{'\n' if i != 0 else ''}<|im_start|>{role_name}\n",
-                truncation=False,
-                padding=False,
-                return_tensors=None,
-            )
-
-            # Get entire tokenized turn
-            tokenized_text = self.tokenizer(
-                text=(
-                    f"{'\n' if i != 0 else ''}<|im_start|>{role_name}\n"
-                    f"{sharegpt_value.strip()}<|im_end|>"
-                ),
-                truncation=False,
-                padding=False,
-                return_tensors=None,
-                return_offsets_mapping=True,
-            )
+            if self.train_on_inputs is False:
+                if sharegpt_from in ["system", "human", "human-chat"]:
+                    COMPILED_REGEX_PATTERNS.append(re.compile("(?s).*"))
+                else:
+                    COMPILED_REGEX_PATTERNS.append(re.compile(f"{'\n' if i != 0 else ''}<\\|im_start\\|>{role_name}\n"))
 
             # Mask out undesired tokens using regex patterns
-            tokenized_text = mask_regex_attention(
+            tokenized_text = mask_regex_attention_tokenizer(
+                tokenizer=self.tokenizer,
                 text=(
                     f"{'\n' if i != 0 else ''}<|im_start|>{role_name}\n"
                     f"{sharegpt_value.strip()}<|im_end|>"
                 ),
-                input_ids=tokenized_text["input_ids"],
-                attention_mask=tokenized_text["attention_mask"],
-                offset_mapping=tokenized_text["offset_mapping"],
                 compiled_regex_patterns=COMPILED_REGEX_PATTERNS,
             )
+            if self.train_on_inputs is False:
+                COMPILED_REGEX_PATTERNS.pop()
 
-            # Strip unwanted BOS token from prefix and tokenized_text
-            if self.tokenizer.bos_token_id and prefix["input_ids"][0] == self.tokenizer.bos_token_id and (i != 0):
-                for key in ["input_ids", "attention_mask"]:
+            # Strip unwanted BOS token from tokenized_text
+            if self.tokenizer.bos_token_id and tokenized_text["input_ids"][0] == self.tokenizer.bos_token_id and (i != 0):
+                for key in ["input_ids", "attention_mask", "labels"]:
                     tokenized_text[key] = tokenized_text[key][1:]
-                    prefix[key] = prefix[key][1:]
-                tokenized_text["labels"] = tokenized_text["labels"][1:]
 
             # Add missing EOS token to tokenized_text
             if tokenized_text["input_ids"][-1] != self.tokenizer.eos_token_id and (i == num_turns - 1):
                 tokenized_text["input_ids"].append(self.tokenizer.eos_token_id)
                 tokenized_text["attention_mask"].append(1)
                 tokenized_text["labels"].append(self.tokenizer.eos_token_id)
-
-            # Handle masked user turn
-            if self.train_on_inputs is False and sharegpt_from in ["system", "human", "human-chat"]:
-                tokenized_text["attention_mask"] = [0] * len(tokenized_text["attention_mask"])
-                tokenized_text["labels"] = [IGNORE_TOKEN_ID] * len(tokenized_text["input_ids"])
-            # Handle partially masked model turn
-            elif self.train_on_inputs is False and sharegpt_from in ["gpt", "gpt-chat", "thought"]:
-                tokenized_text["attention_mask"] = (
-                    [0] * len(prefix["attention_mask"])  # Mask the prefix
-                    + tokenized_text["attention_mask"][len(prefix["attention_mask"]):]
-                )
-                tokenized_text["labels"] = (
-                    [IGNORE_TOKEN_ID] * len(prefix["input_ids"])  # Mask the prefix
-                    + tokenized_text["labels"][len(prefix["input_ids"]):]
-                )
 
             input_ids += tokenized_text["input_ids"]
             attention_mask += tokenized_text["attention_mask"]
