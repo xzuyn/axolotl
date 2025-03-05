@@ -231,11 +231,7 @@ REGEX_PATTERNS = [
 COMPILED_REGEX_PATTERNS = [re.compile(pattern) for pattern in REGEX_PATTERNS]
 
 
-def mask_regex_attention_tokenizer(
-    tokenizer,
-    text: str,
-    compiled_regex_patterns: List[Pattern[str]]
-) -> Dict[str, Union[List[int], List[Tuple[int, int]]]]:
+def mask_regex_attention_tokenizer(tokenizer, text, compiled_regex_patterns):
     """
     Masks tokens in the attention_mask and corresponding labels based on regex matches in the text.
     """
@@ -364,4 +360,3 @@ class CustomChatMLPromptTokenizingStrategy(PromptTokenizingStrategy):
 # Function to load the CustomChatMLPromptTokenizingStrategy
 def load(tokenizer, cfg):
     return CustomChatMLPromptTokenizingStrategy(None, tokenizer, cfg.train_on_inputs)
-
