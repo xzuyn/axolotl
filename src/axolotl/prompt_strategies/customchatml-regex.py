@@ -288,44 +288,42 @@ class CustomChatMLPromptTokenizingStrategy(PromptTokenizingStrategy):
         num_turns = len(prompt[conversation_name])
         input_ids, attention_mask, labels = [], [], []
         for i, turn in enumerate(prompt[conversation_name]):
-            # Get correct roles and messages
-            sharegpt_from, sharegpt_value = turn["from"].strip(), turn["value"].strip()
+            # ShareGPT-to-ChatML Dictionary
+            role_dict = {
+                "system": "system",
+                "human": "user",
+                "gpt": "assistant",
+                "human-chat": "user",
+                "gpt-chat": "assistant"
+            }
 
-            # ShareGPT Roles
-            if sharegpt_from == "system":
-                role_name = "system"
-            elif sharegpt_from == "human":
-                role_name = "user"
-            elif sharegpt_from == "gpt":
-                role_name = "assistant"
-            # CustomShareGPT Roles
-            elif sharegpt_from == "human-chat":
-                role_name = "user"
-                sharegpt_value = f"{turn['name'].strip()}: {sharegpt_value}"
-            elif sharegpt_from == "gpt-chat":
-                role_name = "assistant"
-                sharegpt_value = f"{turn['name'].strip()}: {sharegpt_value}"
-            elif sharegpt_from == "thought":
-                role_name = "thought"
+            if turn["from"] == "human-chat":
+                sharegpt_value = f"{turn['name'].strip()}: {turn['value'].strip()}"
+            elif turn["from"] == "gpt-chat":
+                sharegpt_value = f"{turn['name'].strip()}: {turn['value'].strip()}"
             else:
-                LOG.warning(f"'from' contains an unhandled string: {sharegpt_from}")
-                exit()
+                sharegpt_value = turn["value"].strip()
 
+            # Add new regex pattern to mask the turn appropriately
             if self.train_on_inputs is False:
-                if sharegpt_from in ["system", "human", "human-chat"]:
+                if turn["from"] in ["system", "human", "human-chat"]:
                     COMPILED_REGEX_PATTERNS.append(re.compile("(?s).*"))
                 else:
-                    COMPILED_REGEX_PATTERNS.append(re.compile(f"{'\n' if i != 0 else ''}<\\|im_start\\|>{role_name}\n"))
+                    COMPILED_REGEX_PATTERNS.append(
+                        re.compile(f"{'\n' if i != 0 else ''}<\\|im_start\\|>{role_dict[turn['from']]}\n")
+                    )
 
             # Mask out undesired tokens using regex patterns
             tokenized_text = mask_regex_attention_tokenizer(
                 tokenizer=self.tokenizer,
                 text=(
-                    f"{'\n' if i != 0 else ''}<|im_start|>{role_name}\n"
+                    f"{'\n' if i != 0 else ''}<|im_start|>{role_dict[turn['from']]}\n"
                     f"{sharegpt_value.strip()}<|im_end|>"
                 ),
                 compiled_regex_patterns=COMPILED_REGEX_PATTERNS,
             )
+
+            # Remove the regex pattern so that it doesn't mess anything up
             if self.train_on_inputs is False:
                 COMPILED_REGEX_PATTERNS.pop()
 
