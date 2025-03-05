@@ -231,10 +231,10 @@ REGEX_PATTERNS = [
 COMPILED_REGEX_PATTERNS = [re.compile(pattern) for pattern in REGEX_PATTERNS]
 
 
-def mask_regex_attention_tokenizer(tokenizer, text, compiled_regex_patterns):
+def mask_regex_attention_tokenizer(tokenizer, text, compiled_regex_patterns, add_special_tokens=False):
     tokenized_text = tokenizer(
         text=text,
-        add_special_tokens=False,
+        add_special_tokens=add_special_tokens,
         truncation=False,
         padding=False,
         return_tensors=None,
@@ -299,14 +299,12 @@ class CustomChatMLPromptTokenizingStrategy(PromptTokenizingStrategy):
                 add_special_tokens=False,
                 truncation=False,
                 padding=False,
-                return_tensors=None,
+                return_tensors=None
             )
             # Tokenize and create mask out undesired tokens using regex patterns
             tokenized_text = mask_regex_attention_tokenizer(
                 tokenizer=self.tokenizer,
-                text=(
-                    f"{prefix_text}{ftfy.fix_text(sharegpt_value.strip())}<|im_end|>"
-                ),
+                text=f"{prefix_text}{ftfy.fix_text(sharegpt_value.strip())}<|im_end|>",
                 compiled_regex_patterns=COMPILED_REGEX_PATTERNS,
             )
 
