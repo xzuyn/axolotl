@@ -249,10 +249,12 @@ def mask_regex_attention_tokenizer(tokenizer, text, compiled_regex_patterns):
         label if mask == 1 else IGNORE_TOKEN_ID
         for label, mask in zip(tokenized_text["input_ids"], tokenized_text["attention_mask"])
     ]
+
     for pattern in compiled_regex_patterns:
         for match in pattern.finditer(text):
             found_index = match.start()
             end_index = match.end()
+
             # Check each token's character span; if it overlaps, mask it out.
             for i, (token_start, token_end) in enumerate(tokenized_text["offset_mapping"]):
                 if token_start < end_index and token_end > found_index:
@@ -281,7 +283,6 @@ class CustomChatMLPromptTokenizingStrategy(PromptTokenizingStrategy):
             exit()
 
         # Iterate over each conversation turn in the prompt
-        num_turns = len(prompt[conversation_name])
         input_ids, attention_mask, labels = [], [], []
         for i, turn in enumerate(prompt[conversation_name]):
             # ShareGPT-to-ChatML Dictionary
@@ -329,7 +330,7 @@ class CustomChatMLPromptTokenizingStrategy(PromptTokenizingStrategy):
                     tokenized_text[key] = tokenized_text[key][1:]
 
             # Add missing EOS token to tokenized_text
-            if tokenized_text["input_ids"][-1] != self.tokenizer.eos_token_id and (i == num_turns - 1):
+            if tokenized_text["input_ids"][-1] != self.tokenizer.eos_token_id and (i == len(prompt[conversation_name]) - 1):
                 tokenized_text["input_ids"].append(self.tokenizer.eos_token_id)
                 tokenized_text["attention_mask"].append(1)
                 tokenized_text["labels"].append(self.tokenizer.eos_token_id)
