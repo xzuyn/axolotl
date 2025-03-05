@@ -294,7 +294,7 @@ class CustomChatMLPromptTokenizingStrategy(PromptTokenizingStrategy):
 
             # Get tokens which will be masked out if using train_on_inputs: false
             prefix_text = f"{'\n' if i != 0 else ''}<|im_start|>{role_dict[turn['from']]}\n"
-            prefix = self.tokenizer(
+            tokenized_prefix_text = self.tokenizer(
                 text=prefix_text,
                 add_special_tokens=False,
                 truncation=False,
@@ -305,7 +305,7 @@ class CustomChatMLPromptTokenizingStrategy(PromptTokenizingStrategy):
             tokenized_text = mask_regex_attention_tokenizer(
                 tokenizer=self.tokenizer,
                 text=(
-                    f"{prefix_text}{sharegpt_value.strip()}<|im_end|>"
+                    f"{prefix_text}{ftfy.fix_text(sharegpt_value.strip())}<|im_end|>"
                 ),
                 compiled_regex_patterns=COMPILED_REGEX_PATTERNS,
             )
@@ -316,8 +316,8 @@ class CustomChatMLPromptTokenizingStrategy(PromptTokenizingStrategy):
             # Handle partially masked model turn
             elif self.train_on_inputs is False and turn["from"] in ["gpt", "gpt-chat", "thought"]:
                 tokenized_text["attention_mask"] = (
-                    [0] * len(prefix["attention_mask"])  # Mask the prefix
-                    + tokenized_text["attention_mask"][len(prefix["attention_mask"]):]
+                    [0] * len(tokenized_prefix_text["attention_mask"])  # Mask the prefix
+                    + tokenized_text["attention_mask"][len(tokenized_prefix_text["attention_mask"]):]
                 )
 
             input_ids += tokenized_text["input_ids"]
