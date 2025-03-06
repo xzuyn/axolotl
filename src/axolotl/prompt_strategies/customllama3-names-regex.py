@@ -4,14 +4,13 @@
 import re
 import ftfy
 import logging
-from typing import List, Tuple, Pattern, Dict, Union
 
 # Import from axolotl package
 from axolotl.prompt_tokenizers import PromptTokenizingStrategy
 try:
     from axolotl.prompt_strategies.formatter_regex import COMPILED_REGEX_PATTERNS
 except ImportError:
-    print("You need https://github.com/xzuyn/axolotl/blob/prompt_formats/src/axolotl/prompt_strategies/formatter_regex.py")
+    raise ImportError("You need https://github.com/xzuyn/axolotl/blob/prompt_formats/src/axolotl/prompt_strategies/formatter_regex.py")
 
 
 # Set up logging
