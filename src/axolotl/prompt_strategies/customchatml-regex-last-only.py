@@ -81,6 +81,8 @@ class CustomChatMLPromptTokenizingStrategy(PromptTokenizingStrategy):
             else:
                 sharegpt_value = turn["value"].strip()
 
+            sharegpt_value = sharegpt_value.replace("…", "...")
+
             # Get tokens which will be masked out if using train_on_inputs: false
             prefix_text = f"{'\n' if i != 0 else ''}<|im_start|>{role_dict[turn['from']]}\n"
             tokenized_prefix_text = self.tokenizer(
