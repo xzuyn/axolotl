@@ -95,7 +95,7 @@ class CustomChatMLPromptTokenizingStrategy(PromptTokenizingStrategy):
             # Tokenize and create mask out undesired tokens using regex patterns
             tokenized_text = mask_regex_attention_tokenizer(
                 tokenizer=self.tokenizer,
-                text=f"{prefix_text}{ftfy.fix_text(sharegpt_value.strip())}<|im_end|>",
+                text=f"{prefix_text}{ftfy.fix_text(sharegpt_value).strip()}<|im_end|>",
                 compiled_regex_patterns=COMPILED_REGEX_PATTERNS,
             )
 
