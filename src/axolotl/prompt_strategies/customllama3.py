@@ -54,8 +54,9 @@ class CustomLLaMa3PromptTokenizingStrategy(PromptTokenizingStrategy):
                 sharegpt_value = turn["value"].strip()
 
             # Get tokens which will be masked out if using train_on_inputs: false
-            prefix = self.tokenizer(
-                text=f"<|start_header_id|>{role_dict[turn['from']]}<|end_header_id|>\n\n",
+            prefix_text = f"<|start_header_id|>{role_dict[turn['from']]}<|end_header_id|>\n\n"
+            tokenized_prefix_text = self.tokenizer(
+                text=prefix_text,
                 add_special_tokens=False,
                 truncation=False,
                 padding=False,
@@ -63,10 +64,7 @@ class CustomLLaMa3PromptTokenizingStrategy(PromptTokenizingStrategy):
             )
             # Get entire tokenized turn
             res = self.tokenizer(
-                text=(
-                    f"<|start_header_id|>{role_dict[turn['from']]}<|end_header_id|>\n\n"
-                    f"{sharegpt_value.strip()}<|eot_id|>"
-                ),
+                text=f"{prefix_text}{sharegpt_value.strip()}<|eot_id|>",
                 add_special_tokens=False,
                 truncation=False,
                 padding=False,
