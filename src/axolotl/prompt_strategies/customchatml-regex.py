@@ -2,7 +2,10 @@
 
 # Import necessary modules and functions
 import re
-import ftfy
+try:
+    import ftfy
+except ImportError:
+    raise ImportError("You need ftfy. https://pypi.org/project/ftfy/")
 import logging
 from copy import deepcopy
 
@@ -11,7 +14,7 @@ from axolotl.prompt_tokenizers import PromptTokenizingStrategy
 try:
     from axolotl.prompt_strategies.formatter_regex import COMPILED_REGEX_PATTERNS
 except ImportError:
-    raise ImportError("You need https://github.com/xzuyn/axolotl/blob/prompt_formats/src/axolotl/prompt_strategies/formatter_regex.py")
+    raise ImportError("You need https://github.com/xzuyn/axolotl/blob/came-plus-formatters/src/axolotl/prompt_strategies/formatter_regex.py")
 
 
 # Set up logging

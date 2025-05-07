@@ -1,7 +1,10 @@
 """Module containing the CustomChatMLPromptTokenizingStrategy class"""
 
 # Import necessary modules and functions
-import ftfy
+try:
+    import ftfy
+except ImportError:
+    raise ImportError("You need ftfy. https://pypi.org/project/ftfy/")
 import logging
 
 # Import from axolotl package
