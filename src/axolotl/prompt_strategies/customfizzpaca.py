@@ -46,9 +46,7 @@ class CustomFizzpacaPromptTokenizingStrategy(PromptTokenizingStrategy):
         # Iterate over each conversation turn in the prompt
         input_ids, attention_mask, labels = [], [], []
         for i, turn in enumerate(prompt[conversation_name]):
-            if turn["from"] == "human-chat":
-                sharegpt_value = f"{turn['name'].strip()}: {turn['value'].strip()}"
-            elif turn["from"] == "gpt-chat":
+            if turn["from"] in ["human-chat", "gpt-chat"]:
                 sharegpt_value = f"{turn['name'].strip()}: {turn['value'].strip()}"
             else:
                 sharegpt_value = turn["value"].strip()
@@ -95,7 +93,7 @@ class CustomFizzpacaPromptTokenizingStrategy(PromptTokenizingStrategy):
         if self.tokenizer.bos_token_id and input_ids[0] != self.tokenizer.bos_token_id:
             input_ids.insert(0, self.tokenizer.bos_token_id)
             attention_mask.insert(0, 0)
-            labels.insert(0, IGNORE_TOKEN_ID)
+            labels.insert(0, self.tokenizer.bos_token_id)
 
         # Add missing EOS token
         if input_ids[-1] != self.tokenizer.eos_token_id:
