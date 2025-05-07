@@ -45,7 +45,7 @@ class CustomChatMLPromptTokenizingStrategy(PromptTokenizingStrategy):
             exit()
 
         # Iterate over each conversation turn in the prompt
-        input_ids, attention_mask = [], []
+        input_ids, attention_mask, labels = [], [], []
         for i, turn in enumerate(prompt[conversation_name]):
             if turn["from"] == "human-chat":
                 sharegpt_value = f"{turn['name'].strip()}: {turn['value'].strip()}"
@@ -74,16 +74,17 @@ class CustomChatMLPromptTokenizingStrategy(PromptTokenizingStrategy):
 
             # Handle masked user turn
             if self.train_on_inputs is False and turn["from"] in ["system", "human", "human-chat"]:
-                tokenized_text["attention_mask"] = [0] * len(tokenized_text["attention_mask"])
+                input_ids += tokenized_text["input_ids"]
+                attention_mask += tokenized_text["attention_mask"]
+                labels += [IGNORE_TOKEN_ID] * tokenized_text["input_ids"]
             # Handle partially masked model turn
             elif self.train_on_inputs is False and turn["from"] in ["gpt", "gpt-chat", "thought"]:
-                tokenized_text["attention_mask"] = (
-                    [0] * len(tokenized_prefix_text["attention_mask"])  # Mask the prefix
-                    + tokenized_text["attention_mask"][len(tokenized_prefix_text["attention_mask"]):]
+                input_ids += tokenized_text["input_ids"]
+                attention_mask += tokenized_text["attention_mask"]
+                labels += (
+                    [IGNORE_TOKEN_ID] * len(tokenized_prefix_text["input_ids"])  # Mask the prefix
+                    + tokenized_text["input_ids"][len(tokenized_prefix_text["input_ids"]):]
                 )
-
-            input_ids += tokenized_text["input_ids"]
-            attention_mask += tokenized_text["attention_mask"]
 
         # Add missing BOS token
         if self.tokenizer.bos_token_id and input_ids[0] != self.tokenizer.bos_token_id:
@@ -98,10 +99,7 @@ class CustomChatMLPromptTokenizingStrategy(PromptTokenizingStrategy):
         return {
             "input_ids": input_ids,
             "attention_mask": attention_mask,
-            "labels": [
-                label if mask == 1 else IGNORE_TOKEN_ID
-                for label, mask in zip(input_ids, attention_mask)
-            ]
+            "labels": labels
         }
 
 
