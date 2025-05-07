@@ -4,6 +4,7 @@
 import re
 import ftfy
 import logging
+from copy import deepcopy
 
 # Import from axolotl package
 from axolotl.prompt_tokenizers import PromptTokenizingStrategy
@@ -30,7 +31,7 @@ def mask_regex_attention_tokenizer(tokenizer, text, compiled_regex_patterns, add
         return_offsets_mapping=True,
     )
 
-    regex_mask_labels = tokenized_text["input_ids"]
+    regex_mask_labels = deepcopy(tokenized_text["input_ids"])
     for pattern in compiled_regex_patterns:
         for match in pattern.finditer(text):
             found_index = match.start()
