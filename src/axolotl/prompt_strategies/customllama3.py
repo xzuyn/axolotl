@@ -25,7 +25,7 @@ class CustomLLaMa3PromptTokenizingStrategy(PromptTokenizingStrategy):
         super().__init__(prompter, tokenizer, *args, **kwargs)
 
     def tokenize_prompt(self, prompt):
-        # ShareGPT-to-ChatML Dictionary
+        # ShareGPT-to-LLaMA3 Dictionary
         role_dict = {
             "system": "system",
             "human": "user",

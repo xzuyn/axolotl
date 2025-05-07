@@ -1,17 +1,12 @@
 """Module containing the CustomGemma2PromptTokenizingStrategy class"""
 
 # Import necessary modules and functions
-import copy
+import ftfy
 import logging
-from collections import defaultdict
-from typing import Generator, List, Tuple
 
 # Import from axolotl package
-from axolotl.prompt_tokenizers import (
-    PromptTokenizingStrategy,
-    parse_tokenized_to_result,
-    tokenize_prompt_default,
-)
+from axolotl.prompt_tokenizers import PromptTokenizingStrategy
+
 
 # Set up logging
 LOG = logging.getLogger("axolotl")
@@ -30,11 +25,14 @@ class CustomGemma2PromptTokenizingStrategy(PromptTokenizingStrategy):
         super().__init__(prompter, tokenizer, *args, **kwargs)
 
     def tokenize_prompt(self, prompt):
-        # Tokenize the prompt based on its conversations
-        result, current_len = tokenize_prompt_default()
-
-        # We don't want to remove the BOS token for the first turn
-        strip_bos = False
+        # ShareGPT-to-Gemma2 Dictionary
+        role_dict = {
+            "system": "system",
+            "human": "user",
+            "gpt": "model",
+            "human-chat": "user",
+            "gpt-chat": "model"
+        }
 
         # Sometimes it gets named 'conversations' and other times 'conversation'
         if "conversations" in prompt:
@@ -46,120 +44,69 @@ class CustomGemma2PromptTokenizingStrategy(PromptTokenizingStrategy):
             exit()
 
         # Iterate over each conversation turn in the prompt
-        num_turns = len(prompt[conversation_name])
+        input_ids, attention_mask, labels = [], [], []
         for i, turn in enumerate(prompt[conversation_name]):
-            # Strip BOS token and add a new line to the beginning if it's not the first turn
-            if i == 0:
-                strip_bos = False
-                add_new_line = ""
+            if turn["from"] == "human-chat":
+                sharegpt_value = f"{turn['name'].strip()}: {turn['value'].strip()}"
+            elif turn["from"] == "gpt-chat":
+                sharegpt_value = f"{turn['name'].strip()}: {turn['value'].strip()}"
             else:
-                strip_bos = True
-                add_new_line = "\n"
-
-            # Check if this is the last turn, so we know to add the EOS token
-            if i == num_turns - 1:
-                end_of_text = True
-            else:
-                end_of_text = False
-
-            # Get correct roles and messages
-            sharegpt_from, sharegpt_value = turn["from"].strip(), turn["value"].strip()
-            if sharegpt_from == "system":
-                role_name = "system"
-            elif sharegpt_from == "human":
-                role_name = "user"
-            elif sharegpt_from == "human-chat":
-                role_name = "user"
-                sharegpt_value = f"{turn['name'].strip()}: {sharegpt_value}"
-            elif sharegpt_from == "gpt":
-                role_name = "model"
-            elif sharegpt_from == "gpt-chat":
-                role_name = "model"
-                sharegpt_value = f"{turn['name'].strip()}: {sharegpt_value}"
-            else:
-                LOG.warning(f"'from' contains an unhandled string: {sharegpt_from}")
-                exit()
+                sharegpt_value = turn["value"].strip()
 
             # Get tokens which will be masked out if using train_on_inputs: false
-            prefix = self.tokenizer(
-                f"{add_new_line}<start_of_turn>{role_name}\n",
+            prefix_text = f"{'\n' if i != 0 else ''}<start_of_turn>{role_dict[turn['from']]}\n"
+            tokenized_prefix_text = self.tokenizer(
+                text=prefix_text,
+                add_special_tokens=False,
                 truncation=False,
                 padding=False,
                 return_tensors=None,
             )
-            if prefix["input_ids"][0] == self.tokenizer.bos_token_id and strip_bos:
-                prefix["input_ids"] = prefix["input_ids"][1:]
-                prefix["attention_mask"] = prefix["attention_mask"][1:]
-
             # Get entire tokenized turn
-            res = self.tokenizer(
-                f"{add_new_line}<start_of_turn>{role_name}\n"
-                f"{sharegpt_value.strip()}<end_of_turn>",
+            tokenized_text = self.tokenizer(
+                text=f"{prefix_text}{ftfy.fix_text(sharegpt_value.strip())}<end_of_turn>",
+                add_special_tokens=False,
                 truncation=False,
                 padding=False,
                 return_tensors=None,
             )
-            if res["input_ids"][-1] != self.tokenizer.eos_token_id and end_of_text:
-                res["input_ids"].append(self.tokenizer.eos_token_id)
-                res["attention_mask"].append(1)
-            if res["input_ids"][0] == self.tokenizer.bos_token_id and strip_bos:
-                res["input_ids"] = res["input_ids"][1:]
-                res["attention_mask"] = res["attention_mask"][1:]
 
             # Handle masked user turn
-            if (
-                self.train_on_inputs is False
-                and (
-                    sharegpt_from == "system"
-                    or sharegpt_from == "human"
-                    or sharegpt_from == "human-chat"
-                )
-            ):
-                labels = [IGNORE_TOKEN_ID] * len(res["input_ids"])
+            if self.train_on_inputs is False and turn["from"] in ["system", "human", "human-chat"]:
+                input_ids += tokenized_text["input_ids"]
+                attention_mask += tokenized_text["attention_mask"]
+                labels += [IGNORE_TOKEN_ID] * tokenized_text["input_ids"]
             # Handle partially masked model turn
-            elif (
-                self.train_on_inputs is False
-                and (
-                    sharegpt_from == "gpt"
-                    or sharegpt_from == "gpt-chat"
-                )
-            ):
-                labels = (
-                    [IGNORE_TOKEN_ID] * len(prefix["input_ids"])  # Mask the prefix
-                    + [*copy.deepcopy(res["input_ids"])][len(prefix["input_ids"]):]
+            elif self.train_on_inputs is False and turn["from"] in ["gpt", "gpt-chat", "thought"]:
+                input_ids += tokenized_text["input_ids"]
+                attention_mask += tokenized_text["attention_mask"]
+                labels += (
+                    [IGNORE_TOKEN_ID] * len(tokenized_prefix_text["input_ids"])  # Mask the prefix
+                    + tokenized_text["input_ids"][len(tokenized_prefix_text["input_ids"]):]
                 )
             # Handle unmasked turn
             else:
-                labels = res["input_ids"]
+                input_ids += tokenized_text["input_ids"]
+                attention_mask += tokenized_text["attention_mask"]
+                labels += tokenized_text["input_ids"]
 
-            # Parse tokenized result and update current length
-            result, current_len = parse_tokenized_to_result(
-                result,
-                current_len,
-                res,
-                labels,
-                pad_token_id=self.tokenizer.pad_token_id,
-            )
+            # Add missing BOS token
+        if self.tokenizer.bos_token_id and input_ids[0] != self.tokenizer.bos_token_id:
+            input_ids.insert(0, self.tokenizer.bos_token_id)
+            attention_mask.insert(0, 0)
 
-        return result
+            # Add missing EOS token
+        if input_ids[-1] != self.tokenizer.eos_token_id:
+            input_ids.append(self.tokenizer.eos_token_id)
+            attention_mask.append(1)
 
-
-# TODO: Remove this as it doesn't get used
-class CustomGemma2Prompter:
-    """
-    Prompter for CustomGemma2.
-    """
-
-    def __init__(self, *args, **kwargs):
-        # Constructor does nothing
-        pass
+        return {
+            "input_ids": input_ids,
+            "attention_mask": attention_mask,
+            "labels": labels
+        }
 
 
 # Function to load the CustomGemma2PromptTokenizingStrategy
 def load(tokenizer, cfg):
-    return CustomGemma2PromptTokenizingStrategy(
-        CustomGemma2Prompter(),  # TODO: Remove this as it doesn't get used
-        tokenizer,
-        cfg.train_on_inputs,
-        cfg.sequence_len
-    )
+    return CustomGemma2PromptTokenizingStrategy(None, tokenizer, cfg.train_on_inputs)
