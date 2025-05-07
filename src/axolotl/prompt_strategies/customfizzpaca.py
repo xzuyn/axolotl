@@ -1,17 +1,11 @@
 """Module containing the CustomFizzpacaPromptTokenizingStrategy class"""
 
 # Import necessary modules and functions
-import copy
+import ftfy
 import logging
-from collections import defaultdict
-from typing import Generator, List, Tuple
 
 # Import from axolotl package
-from axolotl.prompt_tokenizers import (
-    PromptTokenizingStrategy,
-    parse_tokenized_to_result,
-    tokenize_prompt_default,
-)
+from axolotl.prompt_tokenizers import PromptTokenizingStrategy
 
 
 # Set up logging
@@ -31,8 +25,14 @@ class CustomFizzpacaPromptTokenizingStrategy(PromptTokenizingStrategy):
         super().__init__(prompter, tokenizer, *args, **kwargs)
 
     def tokenize_prompt(self, prompt):
-        # Tokenize the prompt based on its conversations
-        result, current_len = tokenize_prompt_default()
+        # ShareGPT-to-Fizzpaca Dictionary
+        role_dict = {
+            "system": "### System:",
+            "human": "### Instruction:",
+            "gpt": "### Response:",
+            "human-chat": "### Instruction:",
+            "gpt-chat": "### Response:"
+        }
 
         # Sometimes it gets named 'conversations' and other times 'conversation'
         if "conversations" in prompt:
@@ -44,133 +44,72 @@ class CustomFizzpacaPromptTokenizingStrategy(PromptTokenizingStrategy):
             exit()
 
         # Iterate over each conversation turn in the prompt
-        num_turns = len(prompt[conversation_name])
+        input_ids, attention_mask, labels = [], [], []
         for i, turn in enumerate(prompt[conversation_name]):
-            # Strip BOS token and add a new line to the beginning if it's not the first turn
-            if i == 0:
-                strip_bos = False
-                add_new_line = ""
+            if turn["from"] == "human-chat":
+                sharegpt_value = f"{turn['name'].strip()}: {turn['value'].strip()}"
+            elif turn["from"] == "gpt-chat":
+                sharegpt_value = f"{turn['name'].strip()}: {turn['value'].strip()}"
             else:
-                strip_bos = True
-                add_new_line = "\n\n"
-
-            # Check if this is the last turn, so we know to add the EOS token
-            if i == num_turns - 1:
-                end_of_text = True
-            else:
-                end_of_text = False
-
-            # Get correct roles and messages
-            sharegpt_from, sharegpt_value = turn["from"].strip(), turn["value"].strip()
-            # ShareGPT Roles
-            if sharegpt_from == "system":
-                role_name = "### System:"
-            elif sharegpt_from == "human":
-                role_name = "### Instruction:"
-            elif sharegpt_from == "gpt":
-                role_name = "### Response:"
-            # CustomShareGPT Roles
-            elif sharegpt_from == "human-chat":
-                role_name = "### Instruction:"
-                sharegpt_value = f"{turn['name'].strip()}: {sharegpt_value}"
-            elif sharegpt_from == "gpt-chat":
-                role_name = "### Response:"
-                sharegpt_value = f"{turn['name'].strip()}: {sharegpt_value}"
-            else:
-                LOG.warning(f"'from' contains an unhandled string: {sharegpt_from}")
-                exit()
+                sharegpt_value = turn["value"].strip()
 
             # Get tokens which will be masked out if using train_on_inputs: false
-            prefix = self.tokenizer(
-                f"{add_new_line}{role_name}\n",
+            prefix_text = f"{'\n\n' if i != 0 else ''}{role_dict[turn['from']]}\n"
+            tokenized_prefix_text = self.tokenizer(
+                text=prefix_text,
+                add_special_tokens=False,
                 truncation=False,
                 padding=False,
                 return_tensors=None,
             )
-            if prefix["input_ids"][0] == self.tokenizer.bos_token_id and strip_bos:
-                prefix["input_ids"] = prefix["input_ids"][1:]
-                prefix["attention_mask"] = prefix["attention_mask"][1:]
-
-            if sharegpt_from == "gpt" or sharegpt_from == "gpt-chat":
-                # Get entire tokenized turn
-                res = self.tokenizer(
-                    f"{add_new_line}{role_name}\n"
-                    f"{sharegpt_value.strip()}",
-                    truncation=False,
-                    padding=False,
-                    return_tensors=None,
-                )
-                end_of_text = True
-            else:
-                # Get entire tokenized turn
-                res = self.tokenizer(
-                    f"{add_new_line}{role_name}\n"
-                    f"{sharegpt_value.strip()}",
-                    truncation=False,
-                    padding=False,
-                    return_tensors=None,
-                )
-            if res["input_ids"][-1] != self.tokenizer.eos_token_id and end_of_text:
-                res["input_ids"].append(self.tokenizer.eos_token_id)
-                res["attention_mask"].append(1)
-            if res["input_ids"][0] == self.tokenizer.bos_token_id and strip_bos:
-                res["input_ids"] = res["input_ids"][1:]
-                res["attention_mask"] = res["attention_mask"][1:]
+            # Get entire tokenized turn
+            eot_text = self.tokenizer.eos_token if turn['from'] in ['gpt', 'gpt-chat'] else ''
+            tokenized_text = self.tokenizer(
+                text=f"{prefix_text}{ftfy.fix_text(sharegpt_value.strip())}{eot_text}",
+                add_special_tokens=False,
+                truncation=False,
+                padding=False,
+                return_tensors=None,
+            )
 
             # Handle masked user turn
-            if (
-                self.train_on_inputs is False
-                and (
-                    sharegpt_from == "system"
-                    or sharegpt_from == "human"
-                    or sharegpt_from == "human-chat"
-                )
-            ):
-                labels = [IGNORE_TOKEN_ID] * len(res["input_ids"])
+            if self.train_on_inputs is False and turn["from"] in ["system", "human", "human-chat"]:
+                input_ids += tokenized_text["input_ids"]
+                attention_mask += tokenized_text["attention_mask"]
+                labels += [IGNORE_TOKEN_ID] * len(tokenized_text["input_ids"])
             # Handle partially masked model turn
-            elif (
-                self.train_on_inputs is False
-                and (
-                    sharegpt_from == "gpt"
-                    or sharegpt_from == "gpt-chat"
-                )
-            ):
-                labels = (
-                    [IGNORE_TOKEN_ID] * len(prefix["input_ids"])  # Mask the prefix
-                    + [*copy.deepcopy(res["input_ids"])][len(prefix["input_ids"]):]
+            elif self.train_on_inputs is False and turn["from"] in ["gpt", "gpt-chat"]:
+                input_ids += tokenized_text["input_ids"]
+                attention_mask += tokenized_text["attention_mask"]
+                labels += (
+                    [IGNORE_TOKEN_ID] * len(tokenized_prefix_text["input_ids"])  # Mask the prefix
+                    + tokenized_text["input_ids"][len(tokenized_prefix_text["input_ids"]):]
                 )
             # Handle unmasked turn
             else:
-                labels = res["input_ids"]
+                input_ids += tokenized_text["input_ids"]
+                attention_mask += tokenized_text["attention_mask"]
+                labels += tokenized_text["input_ids"]
 
-            # Parse tokenized result and update current length
-            result, current_len = parse_tokenized_to_result(
-                result,
-                current_len,
-                res,
-                labels,
-                pad_token_id=self.tokenizer.pad_token_id,
-            )
+        # Add missing BOS token
+        if self.tokenizer.bos_token_id and input_ids[0] != self.tokenizer.bos_token_id:
+            input_ids.insert(0, self.tokenizer.bos_token_id)
+            attention_mask.insert(0, 0)
+            labels.insert(0, IGNORE_TOKEN_ID)
 
-        return result
+        # Add missing EOS token
+        if input_ids[-1] != self.tokenizer.eos_token_id:
+            input_ids.append(self.tokenizer.eos_token_id)
+            attention_mask.append(1)
+            labels.append(self.tokenizer.eos_token_id)
 
-
-# TODO: Remove this as it doesn't get used
-class CustomFizzpacaPrompter:
-    """
-    Prompter for CustomFizzpaca.
-    """
-
-    def __init__(self, *args, **kwargs):
-        # Constructor does nothing
-        pass
+        return {
+            "input_ids": input_ids,
+            "attention_mask": attention_mask,
+            "labels": labels
+        }
 
 
-# Function to load the CustomFizzpacaPromptTokenizingStrategy
+# Function to load the FizzpacaPromptTokenizingStrategy
 def load(tokenizer, cfg):
-    return CustomFizzpacaPromptTokenizingStrategy(
-        CustomFizzpacaPrompter(),  # TODO: Remove this as it doesn't get used
-        tokenizer,
-        cfg.train_on_inputs,
-        cfg.sequence_len
-    )
+    return CustomFizzpacaPromptTokenizingStrategy(None, tokenizer, cfg.train_on_inputs)

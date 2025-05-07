@@ -77,7 +77,7 @@ class CustomChatMLPromptTokenizingStrategy(PromptTokenizingStrategy):
                 attention_mask += tokenized_text["attention_mask"]
                 labels += [IGNORE_TOKEN_ID] * len(tokenized_text["input_ids"])
             # Handle partially masked model turn
-            elif self.train_on_inputs is False and turn["from"] in ["gpt", "gpt-chat", "thought"]:
+            elif self.train_on_inputs is False and turn["from"] in ["gpt", "gpt-chat"]:
                 input_ids += tokenized_text["input_ids"]
                 attention_mask += tokenized_text["attention_mask"]
                 labels += (
