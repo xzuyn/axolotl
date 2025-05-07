@@ -63,7 +63,7 @@ class CustomLLaMa3PromptTokenizingStrategy(PromptTokenizingStrategy):
                 return_tensors=None,
             )
             # Get entire tokenized turn
-            res = self.tokenizer(
+            tokenized_text = self.tokenizer(
                 text=f"{prefix_text}{sharegpt_value.strip()}<|eot_id|>",
                 add_special_tokens=False,
                 truncation=False,
@@ -94,11 +94,13 @@ class CustomLLaMa3PromptTokenizingStrategy(PromptTokenizingStrategy):
         if self.tokenizer.bos_token_id and input_ids[0] != self.tokenizer.bos_token_id:
             input_ids.insert(0, self.tokenizer.bos_token_id)
             attention_mask.insert(0, 0)
+            labels.insert(0, IGNORE_TOKEN_ID)
 
         # Add missing EOS token
         if input_ids[-1] != self.tokenizer.eos_token_id:
             input_ids.append(self.tokenizer.eos_token_id)
             attention_mask.append(1)
+            labels.append(self.tokenizer.eos_token_id)
 
         return {
             "input_ids": input_ids,
