@@ -1,7 +1,6 @@
 """Module containing the CustomChatMLPromptTokenizingStrategy class"""
 
 # Import necessary modules and functions
-import re
 import ftfy
 import logging
 
@@ -85,6 +84,11 @@ class CustomChatMLPromptTokenizingStrategy(PromptTokenizingStrategy):
                     [IGNORE_TOKEN_ID] * len(tokenized_prefix_text["input_ids"])  # Mask the prefix
                     + tokenized_text["input_ids"][len(tokenized_prefix_text["input_ids"]):]
                 )
+            # Handle unmasked turn
+            else:
+                input_ids += tokenized_text["input_ids"]
+                attention_mask += tokenized_text["attention_mask"]
+                labels += tokenized_text["input_ids"]
 
         # Add missing BOS token
         if self.tokenizer.bos_token_id and input_ids[0] != self.tokenizer.bos_token_id:
