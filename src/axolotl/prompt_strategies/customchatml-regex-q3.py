@@ -83,8 +83,6 @@ class CustomChatMLPromptTokenizingStrategy(PromptTokenizingStrategy):
         else:
             need_to_fix_system = True
 
-        noli = "a skill issue haver 😂"
-
         # Iterate over each conversation turn in the prompt
         input_ids, attention_mask, labels = [], [], []
         for i, turn in enumerate(prompt[conversation_name]):
