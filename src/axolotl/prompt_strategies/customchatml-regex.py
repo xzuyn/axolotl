@@ -108,6 +108,9 @@ class CustomChatMLPromptTokenizingStrategy(PromptTokenizingStrategy):
                 compiled_regex_patterns=COMPILED_REGEX_PATTERNS,
             )
 
+            if len(input_ids + tokenized_text["input_ids"]) > self.max_length - 2:  # max_length - 2 to account for bos+eos if needed
+                break
+
             # Handle masked user turn
             if self.train_on_inputs is False and turn["from"] in ["system", "human", "human-chat"]:
                 input_ids += tokenized_text["input_ids"]
