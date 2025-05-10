@@ -49,10 +49,18 @@ class CustomChatMLPromptTokenizingStrategy(PromptTokenizingStrategy):
         # Iterate over each conversation turn in the prompt
         input_ids, attention_mask, labels = [], [], []
         for i, turn in enumerate(prompt[conversation_name]):
-            if turn["from"] in ["human-chat", "gpt-chat"]:
-                sharegpt_value = f"{turn['name'].strip()}: {turn['value'].strip()}"
-            else:
-                sharegpt_value = turn["value"].strip()
+            try:
+                if turn["from"] in ["human-chat", "gpt-chat"]:
+                    sharegpt_value = f"{turn['name'].strip()}: {turn['value'].strip()}"
+                else:
+                    sharegpt_value = turn["value"].strip()
+            except AttributeError:
+                LOG.warning(f"Processed sample will return empty due to AttributeError: {prompt}")
+                return {
+                    "input_ids": [],
+                    "attention_mask": [],
+                    "labels": []
+                }
 
             # Get tokens which will be masked out if using train_on_inputs: false
             prefix_text = ("\n" if i != 0 else "") + f"<|im_start|>{role_dict[turn['from']]}\n"
