@@ -85,9 +85,12 @@ class CustomChatMLPromptTokenizingStrategy(PromptTokenizingStrategy):
                 else:
                     sharegpt_value = turn["value"].strip()
             except AttributeError:
-                LOG.warning(f"AttributeError when getting turn value.")
-                LOG.warning(f"The problem sample: {prompt}")
-                exit()
+                LOG.warning(f"Processed sample will return empty due to AttributeError: {prompt}")
+                return {
+                    "input_ids": [],
+                    "attention_mask": [],
+                    "labels": []
+                }
 
             # Get tokens which will be masked out if using train_on_inputs: false
             prefix_text = ("\n" if i != 0 else "") + f"<|im_start|>{role_dict[turn['from']]}\n"
