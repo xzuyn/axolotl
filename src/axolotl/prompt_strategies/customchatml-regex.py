@@ -92,15 +92,9 @@ class CustomChatMLPromptTokenizingStrategy(PromptTokenizingStrategy):
                     "labels": []
                 }
 
-            # Get tokens which will be masked out if using train_on_inputs: false
+            # Get string which will be masked out if using train_on_inputs: false
             prefix_text = ("\n" if i != 0 else "") + f"<|im_start|>{role_dict[turn['from']]}\n"
-            tokenized_prefix_text = self.tokenizer(
-                text=prefix_text,
-                add_special_tokens=False,
-                truncation=False,
-                padding=False,
-                return_tensors=None,
-            )
+
             # Tokenize and create mask out undesired tokens using regex patterns
             tokenized_text, regex_mask_labels = mask_regex_attention_tokenizer(
                 tokenizer=self.tokenizer,
@@ -120,14 +114,21 @@ class CustomChatMLPromptTokenizingStrategy(PromptTokenizingStrategy):
                 )
             # Handle partially masked model turn
             elif self.train_on_inputs is False and turn["from"] in ["gpt", "gpt-chat"]:
+                prefix_token_count = 0
+                for start, end in tokenized_text["offset_mapping"]:
+                    if end <= len(prefix_text):
+                        prefix_token_count += 1
+                    else:
+                        break
+
                 turn_segments.append(
                     {
                         "from": turn["from"],
                         "input_ids": tokenized_text["input_ids"],
                         "attention_mask": tokenized_text["attention_mask"],
                         "labels": (
-                            [IGNORE_TOKEN_ID] * len(tokenized_prefix_text["input_ids"])  # Mask the prefix
-                            + regex_mask_labels[len(tokenized_prefix_text["input_ids"]):]
+                            [IGNORE_TOKEN_ID] * prefix_token_count  # Mask the prefix
+                            + regex_mask_labels[prefix_token_count:]
                         ),
                     }
                 )
@@ -159,7 +160,7 @@ class CustomChatMLPromptTokenizingStrategy(PromptTokenizingStrategy):
 
         # Return empty if there are less than 2 turns left
         if len(trimmed_turn_segments) < 2:
-            # LOG.warning(f"Processed sample will return empty due to not enough turns")  # Kinda spams the console on some sets
+            # LOG.warning(f"Processed sample will return empty due to not enough turns")
             return {
                 "input_ids": [],
                 "attention_mask": [],
