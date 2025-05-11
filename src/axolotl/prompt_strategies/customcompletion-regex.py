@@ -66,11 +66,19 @@ class CustomCompletionPromptTokenizingStrategy(PromptTokenizingStrategy):
 
     def tokenize_prompt(self, prompt):
         # Tokenize and create mask out undesired tokens using regex patterns
-        tokenized_text, regex_mask_labels = mask_regex_attention_tokenizer(
-            tokenizer=self.tokenizer,
-            text=ftfy.fix_text(prompt[self.field]).strip(),
-            compiled_regex_patterns=COMPILED_REGEX_PATTERNS,
-        )
+        try:
+            tokenized_text, regex_mask_labels = mask_regex_attention_tokenizer(
+                tokenizer=self.tokenizer,
+                text=ftfy.fix_text(prompt[self.field]).strip(),
+                compiled_regex_patterns=COMPILED_REGEX_PATTERNS,
+            )
+        except AttributeError:
+            LOG.warning(f"Processed sample will return empty due to AttributeError")
+            return {
+                "input_ids": [],
+                "attention_mask": [],
+                "labels": []
+            }
 
         # Add missing BOS token
         if self.tokenizer.bos_token_id and tokenized_text["input_ids"][0] != self.tokenizer.bos_token_id:
