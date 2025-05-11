@@ -159,7 +159,7 @@ class CustomChatMLPromptTokenizingStrategy(PromptTokenizingStrategy):
 
         # Return empty if there are less than 2 turns left
         if len(trimmed_turn_segments) < 2:
-            LOG.warning(f"Processed sample will return empty due to not enough turns")
+            # LOG.warning(f"Processed sample will return empty due to not enough turns")  # Kinda spams the console on some sets
             return {
                 "input_ids": [],
                 "attention_mask": [],
