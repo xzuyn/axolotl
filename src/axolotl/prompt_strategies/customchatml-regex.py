@@ -85,7 +85,7 @@ class CustomChatMLPromptTokenizingStrategy(PromptTokenizingStrategy):
                 else:
                     sharegpt_value = turn["value"].strip()
             except AttributeError:
-                LOG.warning(f"Processed sample will return empty due to AttributeError: {prompt}")
+                LOG.warning(f"Processed sample will return empty due to AttributeError")
                 return {
                     "input_ids": [],
                     "attention_mask": [],
