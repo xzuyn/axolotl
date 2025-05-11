@@ -53,9 +53,16 @@ class CustomChatMLPromptTokenizingStrategy(PromptTokenizingStrategy):
     Tokenizing strategy for CustomChatML.
     """
 
-    def __init__(self, prompter, tokenizer, *args, **kwargs):
+    def __init__(self, prompter, tokenizer, train_on_inputs, sequence_len, *args, **kwargs):
         # Call the superclass' constructor
-        super().__init__(prompter, tokenizer, *args, **kwargs)
+        super().__init__(
+            prompter=prompter,
+            tokenizer=tokenizer,
+            train_on_inputs=train_on_inputs,
+            sequence_len=sequence_len,
+            *args,
+            **kwargs
+        )
 
     def tokenize_prompt(self, prompt):
         # ShareGPT-to-ChatML Dictionary
