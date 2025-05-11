@@ -143,12 +143,12 @@ class CustomChatMLPromptTokenizingStrategy(PromptTokenizingStrategy):
                     }
                 )
 
-        # Only keep turns which add up to less than (max_length - 2)
+        # Only keep turns which add up to less than (sequence_len - 2)
         current_length = 0
         trimmed_turn_segments = []
         for turn_segment in turn_segments:
             turn_segment_length = len(turn_segment["input_ids"])
-            if current_length + turn_segment_length > self.max_length - 2:  # max_length - 2 to account for bos+eos
+            if current_length + turn_segment_length > self.sequence_len - 2:  # sequence_len - 2 to account for bos+eos
                 break
             else:
                 trimmed_turn_segments.append(turn_segment)
@@ -195,4 +195,4 @@ class CustomChatMLPromptTokenizingStrategy(PromptTokenizingStrategy):
 
 # Function to load the CustomChatMLPromptTokenizingStrategy
 def load(tokenizer, cfg):
-    return CustomChatMLPromptTokenizingStrategy(None, tokenizer, cfg.train_on_inputs)
+    return CustomChatMLPromptTokenizingStrategy(None, tokenizer, cfg.train_on_inputs, cfg.sequence_len)
