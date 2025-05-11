@@ -53,9 +53,15 @@ class CustomCompletionPromptTokenizingStrategy(PromptTokenizingStrategy):
     Tokenizing strategy for CustomCompletion.
     """
 
-    def __init__(self, prompter, tokenizer, field, *args, **kwargs):
+    def __init__(self, prompter, tokenizer, field, sequence_len, *args, **kwargs):
         # Call the superclass' constructor
-        super().__init__(prompter, tokenizer, *args, **kwargs)
+        super().__init__(
+            prompter=prompter,
+            tokenizer=tokenizer,
+            sequence_len=sequence_len,
+            *args,
+            **kwargs
+        )
         self.field = "text" if not field else field
 
     def tokenize_prompt(self, prompt):
