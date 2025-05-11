@@ -77,7 +77,7 @@ class CustomChatMLPromptTokenizingStrategy(PromptTokenizingStrategy):
             exit()
 
         # Iterate over each conversation turn in the prompt
-        input_ids, attention_mask, labels = [], [], []
+        turn_segments = []
         for i, turn in enumerate(prompt[conversation_name]):
             try:
                 if turn["from"] in ["human-chat", "gpt-chat"]:
@@ -108,35 +108,78 @@ class CustomChatMLPromptTokenizingStrategy(PromptTokenizingStrategy):
                 compiled_regex_patterns=COMPILED_REGEX_PATTERNS,
             )
 
-            if len(input_ids + tokenized_text["input_ids"]) > self.max_length - 2:  # max_length - 2 to account for bos+eos if needed
-                break
-
             # Handle masked user turn
             if self.train_on_inputs is False and turn["from"] in ["system", "human", "human-chat"]:
-                input_ids += tokenized_text["input_ids"]
-                attention_mask += tokenized_text["attention_mask"]
-                labels += [IGNORE_TOKEN_ID] * len(regex_mask_labels)
+                turn_segments.append(
+                    {
+                        "from": turn["from"],
+                        "input_ids": tokenized_text["input_ids"],
+                        "attention_mask": tokenized_text["attention_mask"],
+                        "labels": [IGNORE_TOKEN_ID] * len(regex_mask_labels),
+                    }
+                )
             # Handle partially masked model turn
             elif self.train_on_inputs is False and turn["from"] in ["gpt", "gpt-chat"]:
-                input_ids += tokenized_text["input_ids"]
-                attention_mask += tokenized_text["attention_mask"]
-                labels += (
-                    [IGNORE_TOKEN_ID] * len(tokenized_prefix_text["input_ids"])  # Mask the prefix
-                    + regex_mask_labels[len(tokenized_prefix_text["input_ids"]):]
+                turn_segments.append(
+                    {
+                        "from": turn["from"],
+                        "input_ids": tokenized_text["input_ids"],
+                        "attention_mask": tokenized_text["attention_mask"],
+                        "labels": (
+                            [IGNORE_TOKEN_ID] * len(tokenized_prefix_text["input_ids"])  # Mask the prefix
+                            + regex_mask_labels[len(tokenized_prefix_text["input_ids"]):]
+                        ),
+                    }
                 )
             # Handle unmasked turn
             else:
-                input_ids += tokenized_text["input_ids"]
-                attention_mask += tokenized_text["attention_mask"]
-                labels += regex_mask_labels
+                turn_segments.append(
+                    {
+                        "from": turn["from"],
+                        "input_ids": tokenized_text["input_ids"],
+                        "attention_mask": tokenized_text["attention_mask"],
+                        "labels": regex_mask_labels,
+                    }
+                )
 
-        # Add missing BOS token
+        # Only keep turns which add up to less than (max_length - 2)
+        current_length = 0
+        trimmed_turn_segments = []
+        for turn_segment in turn_segments:
+            turn_segment_length = len(turn_segment["input_ids"])
+            if current_length + turn_segment_length > self.max_length - 2:  # max_length - 2 to account for bos+eos
+                break
+            else:
+                trimmed_turn_segments.append(turn_segment)
+                current_length += turn_segment_length
+
+        # Ensure the final turn is from gpt or gpt-chat
+        while trimmed_turn_segments and trimmed_turn_segments[-1]["from"] not in ["gpt", "gpt-chat"]:
+            trimmed_turn_segments.pop()
+
+        # Return empty if there are less than 2 turns left
+        if len(trimmed_turn_segments) < 2:
+            LOG.warning(f"Processed sample will return empty due to not enough turns")
+            return {
+                "input_ids": [],
+                "attention_mask": [],
+                "labels": []
+            }
+
+        # Combine all the turn segments
+        input_ids, attention_mask, labels = [], [], []
+        for turn_segment in trimmed_turn_segments:
+            input_ids.extend(turn_segment["input_ids"])
+            attention_mask.extend(turn_segment["attention_mask"])
+            labels.extend(turn_segment["labels"])
+
+        # Add missing BOS token if needed
         if self.tokenizer.bos_token_id and input_ids[0] != self.tokenizer.bos_token_id:
             input_ids.insert(0, self.tokenizer.bos_token_id)
             attention_mask.insert(0, 1)
             labels.insert(0, IGNORE_TOKEN_ID)
 
-        # Add missing EOS token
+        # Add missing EOS token if needed
         if input_ids[-1] != self.tokenizer.eos_token_id:
             input_ids.append(self.tokenizer.eos_token_id)
             attention_mask.append(1)
