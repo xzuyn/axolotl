@@ -102,6 +102,13 @@ class CustomLLaMa3PromptTokenizingStrategy(PromptTokenizingStrategy):
             # Get string which will be masked out if using train_on_inputs: false
             prefix_text = f"<|start_header_id|>{role_dict[turn['from']]}<|end_header_id|>\n\n"
 
+            # Tokenize and create mask out undesired tokens using regex patterns
+            tokenized_text, regex_mask_labels = mask_regex_attention_tokenizer(
+                tokenizer=self.tokenizer,
+                text=f"{prefix_text}{ftfy.fix_text(sharegpt_value).strip()}<|eot_id|>",
+                compiled_regex_patterns=COMPILED_REGEX_PATTERNS,
+            )
+
             # Handle masked user turn
             if self.train_on_inputs is False and turn["from"] in ["system", "human", "human-chat"]:
                 turn_segments.append(
