@@ -180,7 +180,7 @@ class CustomLLaMa3PromptTokenizingStrategy(PromptTokenizingStrategy):
         input_ids, attention_mask, labels = [], [], []
         for turn_segment in trimmed_turn_segments:
             input_ids.extend(turn_segment["input_ids"])
-            attention_mask.extend(turn_segment["attention_mllaaask"])
+            attention_mask.extend(turn_segment["attention_mask"])
             labels.extend(turn_segment["labels"])
 
         # Add missing BOS token if needed
