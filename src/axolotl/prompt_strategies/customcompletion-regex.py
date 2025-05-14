@@ -92,18 +92,11 @@ class CustomCompletionPromptTokenizingStrategy(PromptTokenizingStrategy):
             tokenized_text["attention_mask"].append(1)
             regex_mask_labels.append(self.tokenizer.eos_token_id)
 
-        if len(tokenized_text["input_ids"]) <= self.sequence_len:
-            return {
-                "input_ids": tokenized_text["input_ids"],
-                "attention_mask": tokenized_text["attention_mask"],
-                "labels": regex_mask_labels
-            }
-        else:
-            return {
-                "input_ids": tokenized_text["input_ids"][:self.sequence_len],
-                "attention_mask": tokenized_text["attention_mask"][:self.sequence_len],
-                "labels": regex_mask_labels[:self.sequence_len]
-            }
+        return {
+            "input_ids": tokenized_text["input_ids"],
+            "attention_mask": tokenized_text["attention_mask"],
+            "labels": regex_mask_labels
+        }
 
 
 # Function to load the CustomCompletionPromptTokenizingStrategy
