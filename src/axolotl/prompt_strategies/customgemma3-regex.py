@@ -155,9 +155,7 @@ class CustomGemma3PromptTokenizingStrategy(PromptTokenizingStrategy):
         trimmed_turn_segments = []
         for turn_segment in turn_segments:
             turn_segment_length = len(turn_segment["input_ids"])
-            if current_length + turn_segment_length > self.sequence_len - (
-                    1 if self.tokenizer.bos_token_id else 0
-            ):
+            if current_length + turn_segment_length > self.sequence_len - (1 if self.tokenizer.bos_token_id else 0):
                 break
             else:
                 trimmed_turn_segments.append(turn_segment)
@@ -184,7 +182,7 @@ class CustomGemma3PromptTokenizingStrategy(PromptTokenizingStrategy):
             labels.extend(turn_segment["labels"])
 
         # Add missing BOS token if needed
-        if self.tokenizer.bos_token_id and input_ids[0] != self.tokenizer.bos_token_id:
+        if self.tokenizer.add_bos_token and self.tokenizer.bos_token_id and input_ids[0] != self.tokenizer.bos_token_id:
             input_ids.insert(0, self.tokenizer.bos_token_id)
             attention_mask.insert(0, 1)
             labels.insert(0, IGNORE_TOKEN_ID)

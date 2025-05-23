@@ -81,7 +81,7 @@ class CustomCompletionPromptTokenizingStrategy(PromptTokenizingStrategy):
             }
 
         # Add missing BOS token
-        if self.tokenizer.bos_token_id and tokenized_text["input_ids"][0] != self.tokenizer.bos_token_id:
+        if self.tokenizer.add_bos_token and self.tokenizer.bos_token_id and input_ids[0] != self.tokenizer.bos_token_id:
             tokenized_text["input_ids"].insert(0, self.tokenizer.bos_token_id)
             tokenized_text["attention_mask"].insert(0, 1)
             regex_mask_labels.insert(0, IGNORE_TOKEN_ID)
