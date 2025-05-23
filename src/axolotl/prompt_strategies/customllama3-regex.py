@@ -156,7 +156,7 @@ class CustomLLaMa3PromptTokenizingStrategy(PromptTokenizingStrategy):
         for turn_segment in turn_segments:
             turn_segment_length = len(turn_segment["input_ids"])
             if current_length + turn_segment_length > self.sequence_len - (
-                1 if self.tokenizer.bos_token_id else 0
+                1 if self.tokenizer.add_bos_token and self.tokenizer.bos_token_id else 0
             ):
                 break
             else:
