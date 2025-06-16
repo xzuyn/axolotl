@@ -37,7 +37,7 @@ class ePubCleanerPromptTokenizingStrategy(PromptTokenizingStrategy):
         unclean_text = prompt["conversations"][0]["value"]  # human
         clean_text = prompt["conversations"][1]["value"]    # gpt
 
-        prefix_text = f"<|unclean_text|>{unclean_text}<|clean_text|>"
+        prefix_text = f"<|text_clean_start|>{unclean_text}<|text_clean_end|>"
         tokenized_text = self.tokenizer(
             text=f"{prefix_text}{clean_text}{self.tokenizer.eos_token}",
             add_special_tokens=False,
