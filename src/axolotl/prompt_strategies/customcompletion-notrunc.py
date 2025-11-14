@@ -56,17 +56,25 @@ class CustomCompletionPromptTokenizingStrategy(PromptTokenizingStrategy):
                 "labels": []
             }
 
-        # Add missing BOS token
-        if add_bos and self.tokenizer.bos_token_id and tokenized_text["input_ids"][0] != self.tokenizer.bos_token_id:
-            tokenized_text["input_ids"].insert(0, self.tokenizer.bos_token_id)
-            tokenized_text["attention_mask"].insert(0, 1)
-            labels.insert(0, IGNORE_TOKEN_ID)
+        try:
+            # Add missing BOS token
+            if add_bos and self.tokenizer.bos_token_id and tokenized_text["input_ids"][0] != self.tokenizer.bos_token_id:
+                tokenized_text["input_ids"].insert(0, self.tokenizer.bos_token_id)
+                tokenized_text["attention_mask"].insert(0, 1)
+                labels.insert(0, IGNORE_TOKEN_ID)
 
-        # Add missing EOS token
-        if tokenized_text["input_ids"][-1] != self.tokenizer.eos_token_id:
-            tokenized_text["input_ids"].append(self.tokenizer.eos_token_id)
-            tokenized_text["attention_mask"].append(1)
-            labels.append(self.tokenizer.eos_token_id)
+            # Add missing EOS token
+            if tokenized_text["input_ids"][-1] != self.tokenizer.eos_token_id:
+                tokenized_text["input_ids"].append(self.tokenizer.eos_token_id)
+                tokenized_text["attention_mask"].append(1)
+                labels.append(self.tokenizer.eos_token_id)
+        except IndexError:
+            LOG.warning(f"Processed sample will return empty due to IndexError")
+            return {
+                "input_ids": [],
+                "attention_mask": [],
+                "labels": []
+            }
 
         return {
             "input_ids": tokenized_text["input_ids"],
