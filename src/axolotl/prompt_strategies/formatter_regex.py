@@ -1,6 +1,7 @@
 import re
 
 
+# TODO: Use word boundaries for all?
 REGEX_PATTERNS = [
     "(?i)(haze of|take your) pleasure",
     "(?i)(find|found)(|s|ing) solace in",
@@ -33,8 +34,7 @@ REGEX_PATTERNS = [
     "(?i)the world narrows",
     "(?i)pupils blown wide with pleasure",
     "(?i)chestnut eyes",
-    "(?i)(you|he|she|they) grasp(|s) (my|your|his|her|their) chin and force(|s) (you|him|her|them) to meet (your|his|her|their) gaze",
-    "(?i)(you|he|she|they) bites(|s) (your|his|her|their) ear",
+    "(?i)(you|he|she|they) (grasp|bites)(|s) (my|your|his|her|their) (ear|chin and force(|s) (you|him|her|them) to meet (your|his|her|their) gaze)",
     "(?i)nails raking angry red lines down (my|your|his|her|their) back",
     "(?i)(my |your |his |her |their |)cheeks (flame|redden|hollow)(|ing)",
     "(?i)stars burst behind (my|your|his|her|their) eyes",
