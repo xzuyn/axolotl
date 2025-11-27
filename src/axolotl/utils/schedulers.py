@@ -69,11 +69,11 @@ class RexLR(LRScheduler):
             ]
 
         # Post-warmup phase: adjust step relative to the end of warmup
-        step_after = self.last_epoch - self.num_warmup_steps  # 0 at first step after warmup
+        step_after = self.last_epoch - self.num_warmup_steps + 1
         remaining_steps = self.num_steps - self.num_warmup_steps
 
         # Avoid LR spiking or invalid schedules when there are no remaining steps or we've finished training
-        if remaining_steps <= 0 or step_after >= remaining_steps:
+        if remaining_steps <= 0 or step_after > remaining_steps:
             return [self.min_lr for _ in self.base_lrs]
 
         # Calculate REX curve for current step
