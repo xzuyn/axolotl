@@ -21,67 +21,69 @@ class RexLR(LRScheduler):
         optimizer (torch.optim.Optimizer): The optimizer to schedule the learning rate for.
         max_lr (float): The maximum learning rate.
         min_lr (float): The minimum learning rate.
-        total_steps (int): The total number of training steps.
+        num_steps (int): The total number of training steps.
         num_warmup_steps (int): The number of warmup steps.
-        last_step (int): The index of last step.
+        rex_alpha (float): Constant added to the denominator of the REX factor;
+            prevents division-by-zero and softens the initial decay (default: 0.1).
+        rex_beta (float): Multiplier of z in the denominator of the REX factor;
+            controls how quickly the decay flattens as z increases (default: 0.9).
+        last_epoch (int): The index of the last step
     """
 
     def __init__(
-        self, optimizer, max_lr, min_lr, total_steps=0, num_warmup_steps=0, last_step=0
+        self, optimizer, max_lr, min_lr=0.0, num_steps=0, num_warmup_steps=0, rex_alpha=0.1, rex_beta=0.9, last_epoch=-1
     ):
         if min_lr > max_lr:
             raise ValueError(
                 f'Value of "min_lr" should be less than value of "max_lr". Got min_lr={min_lr} and max_lr={max_lr}'
             )
-        if num_warmup_steps > total_steps:
+        if num_warmup_steps > num_steps:
             raise ValueError(
-                f"num_warmup_steps ({num_warmup_steps}) must be less than or equal to total_steps ({total_steps})."
+                f"num_warmup_steps ({num_warmup_steps}) must be less than or equal to num_steps ({num_steps})"
             )
 
         self.min_lr = min_lr
         self.max_lr = max_lr
-        self.total_steps = total_steps
+        self.num_steps = num_steps
         self.num_warmup_steps = num_warmup_steps
-        self.last_step = max(last_step - 1, 0)
+        self.rex_alpha = rex_alpha
+        self.rex_beta = rex_beta
+        self.last_epoch = last_epoch
 
-        # Ensure each parameter group has an "initial_lr" key to avoid issues when resuming.
+        # Ensure each parameter group has an "initial_lr" key to avoid issues when resuming
         for group in optimizer.param_groups:
             initial_lr = group["lr"]
             if isinstance(initial_lr, Tensor):
                 initial_lr = initial_lr.clone()
             group.setdefault("initial_lr", initial_lr)
-        # Pass self.last_step as last_epoch to the parent.
-        super().__init__(optimizer, last_epoch=self.last_step)
 
-    @property
-    def last_step(self):
-        return self.last_epoch
-
-    @last_step.setter
-    def last_step(self, value):
-        self.last_epoch = value
+        super().__init__(optimizer, last_epoch)
 
     def get_lr(self):
-        # Warmup phase: if defined, increase lr linearly from 0 to max_lr.
-        if 1 <= self.last_step <= self.num_warmup_steps:
+        # Single warmup step
+        if self.num_warmup_steps == 1 and self.last_epoch == 1:
+            return [self.min_lr for _ in self.base_lrs]
+        # Multiple warmup steps; increase lr linearly from min_lr to max_lr
+        elif self.num_warmup_steps > 1 and 1 <= self.last_epoch <= (self.num_warmup_steps - 1):
             return [
-                base_lr * self.last_step / self.num_warmup_steps
-                for base_lr in self.base_lrs
+                self.min_lr + (self.max_lr - self.min_lr) * (self.last_epoch - 1) / (self.num_warmup_steps - 1)
+                for _ in self.base_lrs
             ]
 
-        # Post-warmup phase: adjust step relative to the end of warmup.
-        step_after = self.last_step - self.num_warmup_steps
-        remaining_steps = self.total_steps - self.num_warmup_steps
+        # Post-warmup phase: adjust step relative to the end of warmup
+        step_after = self.last_epoch - self.num_warmup_steps
+        remaining_steps = self.num_steps - self.num_warmup_steps
 
         # Avoid LR spiking
         if step_after >= remaining_steps or step_after == -1 or remaining_steps <= 0:
             return [self.min_lr for _ in self.base_lrs]
 
-        mod_iter = step_after % remaining_steps
-        z = (remaining_steps - mod_iter) / remaining_steps
+        # Calculate REX curve for current step
+        rex_z = (remaining_steps - (step_after % remaining_steps)) / remaining_steps
         rex_factor = self.min_lr / self.max_lr + (1.0 - self.min_lr / self.max_lr) * (
-            z / (0.1 + 0.9 * z)
+            rex_z / (self.rex_alpha + self.rex_beta * rex_z)
         )
+
         return [base_lr * rex_factor for base_lr in self.base_lrs]
 
 
