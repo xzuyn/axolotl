@@ -18,11 +18,11 @@ class RexLR(LRScheduler):
     - Based on: https://arxiv.org/abs/2107.04197
 
     Args:
-        optimizer (torch.optim.Optimizer): The optimizer to schedule the learning rate for.
-        max_lr (float): The maximum learning rate.
-        min_lr (float): The minimum learning rate.
-        num_steps (int): The total number of training steps.
-        num_warmup_steps (int): The number of warmup steps.
+        optimizer (torch.optim.Optimizer): The optimizer to schedule the learning rate for
+        max_lr (float): The maximum learning rate
+        min_lr (float): The minimum learning rate
+        num_steps (int): The total number of training steps
+        num_warmup_steps (int): The number of warmup steps
         rex_alpha (float): Constant added to the denominator of the REX factor;
             prevents division-by-zero and softens the initial decay (default: 0.1).
         rex_beta (float): Multiplier of z in the denominator of the REX factor;
@@ -52,30 +52,26 @@ class RexLR(LRScheduler):
 
         # Ensure each parameter group has an "initial_lr" key to avoid issues when resuming
         for group in optimizer.param_groups:
-            initial_lr = group["lr"]
-            if isinstance(initial_lr, Tensor):
-                initial_lr = initial_lr.clone()
-            group.setdefault("initial_lr", initial_lr)
+            group.setdefault("initial_lr", group["lr"])
 
         super().__init__(optimizer, last_epoch)
 
     def get_lr(self):
-        # Single warmup step
-        if self.num_warmup_steps == 1 and self.last_epoch == 1:
-            return [self.min_lr for _ in self.base_lrs]
-        # Multiple warmup steps; increase lr linearly from min_lr to max_lr
-        elif self.num_warmup_steps > 1 and 1 <= self.last_epoch <= (self.num_warmup_steps - 1):
+        # Warmup phase: linearly increase lr from min_lr to max_lr over num_warmup_steps steps.
+        # last_epoch starts at -1 before any step(), so progress = (last_epoch + 1) / num_warmup_steps is 0 at init.
+        if self.num_warmup_steps > 0 and self.last_epoch < self.num_warmup_steps:
+            progress = (self.last_epoch + 1) / float(self.num_warmup_steps)
             return [
-                self.min_lr + (self.max_lr - self.min_lr) * (self.last_epoch - 1) / (self.num_warmup_steps - 1)
+                self.min_lr + (self.max_lr - self.min_lr) * progress
                 for _ in self.base_lrs
             ]
 
         # Post-warmup phase: adjust step relative to the end of warmup
-        step_after = self.last_epoch - self.num_warmup_steps
+        step_after = self.last_epoch - self.num_warmup_steps  # 0 at first step after warmup
         remaining_steps = self.num_steps - self.num_warmup_steps
 
-        # Avoid LR spiking
-        if step_after >= remaining_steps or step_after == -1 or remaining_steps <= 0:
+        # Avoid LR spiking or invalid schedules when there are no remaining steps or we've finished training
+        if remaining_steps <= 0 or step_after >= remaining_steps:
             return [self.min_lr for _ in self.base_lrs]
 
         # Calculate REX curve for current step
