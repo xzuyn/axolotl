@@ -58,11 +58,13 @@ class RexLR(LRScheduler):
 
     def get_lr(self):
         # Warmup phase: linearly increase lr from min_lr to max_lr over num_warmup_steps steps.
-        # last_epoch starts at -1 before any step(), so progress = (last_epoch + 1) / num_warmup_steps is 0 at init.
         if self.num_warmup_steps > 0 and self.last_epoch < self.num_warmup_steps:
-            progress = (self.last_epoch + 1) / float(self.num_warmup_steps)
+            if self.last_epoch == -1:
+                return [self.min_lr for _ in self.base_lrs]
             return [
-                self.min_lr + (self.max_lr - self.min_lr) * progress
+                self.min_lr + (self.max_lr - self.min_lr) * (
+                    self.last_epoch / float(max(1, self.num_warmup_steps - 1))
+                )
                 for _ in self.base_lrs
             ]
 
