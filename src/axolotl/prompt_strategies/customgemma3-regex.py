@@ -2,6 +2,7 @@
 
 # Import necessary modules and functions
 import re
+
 try:
     import ftfy
 except ImportError:
@@ -11,10 +12,13 @@ from copy import deepcopy
 
 # Import from axolotl package
 from axolotl.prompt_tokenizers import PromptTokenizingStrategy
+
 try:
     from axolotl.prompt_strategies.formatter_regex import COMPILED_REGEX_PATTERNS
 except ImportError:
-    raise ImportError("You need https://github.com/xzuyn/axolotl/blob/came-plus-formatters/src/axolotl/prompt_strategies/formatter_regex.py")
+    raise ImportError(
+        "You need https://github.com/xzuyn/axolotl/blob/came-plus-formatters/src/axolotl/prompt_strategies/formatter_regex.py"
+    )
 
 
 # Set up logging
@@ -24,7 +28,9 @@ LOG = logging.getLogger("axolotl")
 IGNORE_TOKEN_ID = -100
 
 
-def mask_regex_attention_tokenizer(tokenizer, text, compiled_regex_patterns, add_special_tokens=False):
+def mask_regex_attention_tokenizer(
+    tokenizer, text, compiled_regex_patterns, add_special_tokens=False
+):
     tokenized_text = tokenizer(
         text=text,
         add_special_tokens=add_special_tokens,
@@ -41,7 +47,9 @@ def mask_regex_attention_tokenizer(tokenizer, text, compiled_regex_patterns, add
             end_index = match.end()
 
             # Check each token's character span; if it overlaps, mask it out.
-            for i, (token_start, token_end) in enumerate(tokenized_text["offset_mapping"]):
+            for i, (token_start, token_end) in enumerate(
+                tokenized_text["offset_mapping"]
+            ):
                 if token_start < end_index and token_end > found_index:
                     regex_mask_labels[i] = IGNORE_TOKEN_ID
 
@@ -53,7 +61,9 @@ class CustomGemma3PromptTokenizingStrategy(PromptTokenizingStrategy):
     Tokenizing strategy for CustomGemma3.
     """
 
-    def __init__(self, prompter, tokenizer, train_on_inputs, sequence_len, *args, **kwargs):
+    def __init__(
+        self, prompter, tokenizer, train_on_inputs, sequence_len, *args, **kwargs
+    ):
         # Call the superclass' constructor
         super().__init__(
             prompter=prompter,
@@ -61,7 +71,7 @@ class CustomGemma3PromptTokenizingStrategy(PromptTokenizingStrategy):
             train_on_inputs=train_on_inputs,
             sequence_len=sequence_len,
             *args,
-            **kwargs
+            **kwargs,
         )
 
     def tokenize_prompt(self, prompt):
@@ -74,7 +84,7 @@ class CustomGemma3PromptTokenizingStrategy(PromptTokenizingStrategy):
             "human": "user",
             "gpt": "model",
             "human-chat": "user",
-            "gpt-chat": "model"
+            "gpt-chat": "model",
         }
 
         # Sometimes it gets named 'conversations' and other times 'conversation'
@@ -96,14 +106,12 @@ class CustomGemma3PromptTokenizingStrategy(PromptTokenizingStrategy):
                     sharegpt_value = turn["value"].strip()
             except AttributeError:
                 LOG.warning(f"Processed sample will return empty due to AttributeError")
-                return {
-                    "input_ids": [],
-                    "attention_mask": [],
-                    "labels": []
-                }
+                return {"input_ids": [], "attention_mask": [], "labels": []}
 
             # Get string which will be masked out if using train_on_inputs: false
-            prefix_text = ("\n" if i != 0 else "") + f"<start_of_turn>{role_dict[turn['from']]}\n"
+            prefix_text = (
+                "\n" if i != 0 else ""
+            ) + f"<start_of_turn>{role_dict[turn['from']]}\n"
 
             # Tokenize and create mask out undesired tokens using regex patterns
             tokenized_text, regex_mask_labels = mask_regex_attention_tokenizer(
@@ -113,7 +121,11 @@ class CustomGemma3PromptTokenizingStrategy(PromptTokenizingStrategy):
             )
 
             # Handle masked user turn
-            if self.train_on_inputs is False and turn["from"] in ["system", "human", "human-chat"]:
+            if self.train_on_inputs is False and turn["from"] in [
+                "system",
+                "human",
+                "human-chat",
+            ]:
                 turn_segments.append(
                     {
                         "from": turn["from"],
@@ -167,17 +179,16 @@ class CustomGemma3PromptTokenizingStrategy(PromptTokenizingStrategy):
                 current_length += turn_segment_length
 
         # Ensure the final turn is from gpt or gpt-chat
-        while trimmed_turn_segments and trimmed_turn_segments[-1]["from"] not in ["gpt", "gpt-chat"]:
+        while trimmed_turn_segments and trimmed_turn_segments[-1]["from"] not in [
+            "gpt",
+            "gpt-chat",
+        ]:
             trimmed_turn_segments.pop()
 
         # Return empty if there are less than 2 turns left
         if len(trimmed_turn_segments) < 2:
-            # LOG.warning(f"Processed sample will return empty due to not enough turns")
-            return {
-                "input_ids": [],
-                "attention_mask": [],
-                "labels": []
-            }
+            # LOG.warning(f"Processed sample will return empty due to not enough turns")  # This spams
+            return {"input_ids": [], "attention_mask": [], "labels": []}
 
         # Combine all the turn segments
         input_ids, attention_mask, labels = [], [], []
@@ -187,18 +198,32 @@ class CustomGemma3PromptTokenizingStrategy(PromptTokenizingStrategy):
             labels.extend(turn_segment["labels"])
 
         # Add missing BOS token if needed
-        if add_bos and self.tokenizer.bos_token_id and input_ids[0] != self.tokenizer.bos_token_id:
+        if (
+            add_bos
+            and self.tokenizer.bos_token_id
+            and input_ids[0] != self.tokenizer.bos_token_id
+        ):
             input_ids.insert(0, self.tokenizer.bos_token_id)
             attention_mask.insert(0, 1)
             labels.insert(0, IGNORE_TOKEN_ID)
 
+        # Training on samples with all tokens masked is a waste of compute
+        # May be worth checking if less than X% of tokens are trainable too
+        if all(label == IGNORE_TOKEN_ID for label in labels):
+            LOG.warning(
+                f"Processed sample will return empty due to no trainable tokens after masking"
+            )
+            return {"input_ids": [], "attention_mask": [], "labels": []}
+
         return {
             "input_ids": input_ids,
             "attention_mask": attention_mask,
-            "labels": labels
+            "labels": labels,
         }
 
 
 # Function to load the CustomGemma3PromptTokenizingStrategy
 def load(tokenizer, cfg):
-    return CustomGemma3PromptTokenizingStrategy(None, tokenizer, cfg.train_on_inputs, cfg.sequence_len)
+    return CustomGemma3PromptTokenizingStrategy(
+        None, tokenizer, cfg.train_on_inputs, cfg.sequence_len
+    )
