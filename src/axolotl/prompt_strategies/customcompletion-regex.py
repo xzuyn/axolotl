@@ -2,6 +2,7 @@
 
 # Import necessary modules and functions
 import re
+
 try:
     import ftfy
 except ImportError:
@@ -11,10 +12,13 @@ from copy import deepcopy
 
 # Import from axolotl package
 from axolotl.prompt_tokenizers import PromptTokenizingStrategy
+
 try:
     from axolotl.prompt_strategies.formatter_regex import COMPILED_REGEX_PATTERNS
 except ImportError:
-    raise ImportError("You need https://github.com/xzuyn/axolotl/blob/came-plus-formatters/src/axolotl/prompt_strategies/formatter_regex.py")
+    raise ImportError(
+        "You need https://github.com/xzuyn/axolotl/blob/came-plus-formatters/src/axolotl/prompt_strategies/formatter_regex.py"
+    )
 
 
 # Set up logging
@@ -24,7 +28,9 @@ LOG = logging.getLogger("axolotl")
 IGNORE_TOKEN_ID = -100
 
 
-def mask_regex_attention_tokenizer(tokenizer, text, compiled_regex_patterns, add_special_tokens=False):
+def mask_regex_attention_tokenizer(
+    tokenizer, text, compiled_regex_patterns, add_special_tokens=False
+):
     tokenized_text = tokenizer(
         text=text,
         add_special_tokens=add_special_tokens,
@@ -41,7 +47,9 @@ def mask_regex_attention_tokenizer(tokenizer, text, compiled_regex_patterns, add
             end_index = match.end()
 
             # Check each token's character span; if it overlaps, mask it out.
-            for i, (token_start, token_end) in enumerate(tokenized_text["offset_mapping"]):
+            for i, (token_start, token_end) in enumerate(
+                tokenized_text["offset_mapping"]
+            ):
                 if token_start < end_index and token_end > found_index:
                     regex_mask_labels[i] = IGNORE_TOKEN_ID
 
@@ -60,7 +68,7 @@ class CustomCompletionPromptTokenizingStrategy(PromptTokenizingStrategy):
             tokenizer=tokenizer,
             sequence_len=sequence_len,
             *args,
-            **kwargs
+            **kwargs,
         )
         self.field = "text" if not field else field
 
@@ -77,14 +85,14 @@ class CustomCompletionPromptTokenizingStrategy(PromptTokenizingStrategy):
             )
         except AttributeError:
             LOG.warning(f"Processed sample will return empty due to AttributeError")
-            return {
-                "input_ids": [],
-                "attention_mask": [],
-                "labels": []
-            }
+            return {"input_ids": [], "attention_mask": [], "labels": []}
 
         # Add missing BOS token
-        if add_bos and self.tokenizer.bos_token_id and tokenized_text["input_ids"][0] != self.tokenizer.bos_token_id:
+        if (
+            add_bos
+            and self.tokenizer.bos_token_id
+            and tokenized_text["input_ids"][0] != self.tokenizer.bos_token_id
+        ):
             tokenized_text["input_ids"].insert(0, self.tokenizer.bos_token_id)
             tokenized_text["attention_mask"].insert(0, 1)
             regex_mask_labels.insert(0, IGNORE_TOKEN_ID)
@@ -95,20 +103,30 @@ class CustomCompletionPromptTokenizingStrategy(PromptTokenizingStrategy):
             tokenized_text["attention_mask"].append(1)
             regex_mask_labels.append(self.tokenizer.eos_token_id)
 
+        # Training on samples with all tokens masked is a waste of compute
+        # May be worth checking if less than X% of tokens are trainable too
+        if all(label == IGNORE_TOKEN_ID for label in regex_mask_labels):
+            LOG.warning(
+                f"Processed sample will return empty due to no trainable tokens after masking"
+            )
+            return {"input_ids": [], "attention_mask": [], "labels": []}
+
         if len(tokenized_text["input_ids"]) <= self.sequence_len:
             return {
                 "input_ids": tokenized_text["input_ids"],
                 "attention_mask": tokenized_text["attention_mask"],
-                "labels": regex_mask_labels
+                "labels": regex_mask_labels,
             }
         else:
             return {
-                "input_ids": tokenized_text["input_ids"][:self.sequence_len],
-                "attention_mask": tokenized_text["attention_mask"][:self.sequence_len],
-                "labels": regex_mask_labels[:self.sequence_len]
+                "input_ids": tokenized_text["input_ids"][: self.sequence_len],
+                "attention_mask": tokenized_text["attention_mask"][: self.sequence_len],
+                "labels": regex_mask_labels[: self.sequence_len],
             }
 
 
 # Function to load the CustomCompletionPromptTokenizingStrategy
 def load(tokenizer, cfg, ds_cfg):
-    return CustomCompletionPromptTokenizingStrategy(None, tokenizer, ds_cfg.field, cfg.sequence_len)
+    return CustomCompletionPromptTokenizingStrategy(
+        None, tokenizer, ds_cfg.field, cfg.sequence_len
+    )
