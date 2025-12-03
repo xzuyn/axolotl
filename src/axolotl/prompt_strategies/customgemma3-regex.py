@@ -8,16 +8,18 @@ try:
 except ImportError:
     raise ImportError("You need ftfy. https://pypi.org/project/ftfy/")
 import logging
-from copy import deepcopy
 
 # Import from axolotl package
 from axolotl.prompt_tokenizers import PromptTokenizingStrategy
 
 try:
-    from axolotl.prompt_strategies.formatter_regex import COMPILED_REGEX_PATTERNS
+    from axolotl.prompt_strategies.regex_attention import (
+        COMPILED_REGEX_PATTERNS,
+        regex_attention_tokenizer,
+    )
 except ImportError:
     raise ImportError(
-        "You need https://github.com/xzuyn/axolotl/blob/came-plus-formatters/src/axolotl/prompt_strategies/formatter_regex.py"
+        "You need https://github.com/xzuyn/axolotl/blob/latest-formatters/src/axolotl/prompt_strategies/regex_attention.py"
     )
 
 
@@ -26,34 +28,6 @@ LOG = logging.getLogger("axolotl")
 
 # Define a constant token ID to ignore
 IGNORE_TOKEN_ID = -100
-
-
-def mask_regex_attention_tokenizer(
-    tokenizer, text, compiled_regex_patterns, add_special_tokens=False
-):
-    tokenized_text = tokenizer(
-        text=text,
-        add_special_tokens=add_special_tokens,
-        truncation=False,
-        padding=False,
-        return_tensors=None,
-        return_offsets_mapping=True,
-    )
-
-    regex_mask_labels = deepcopy(tokenized_text["input_ids"])
-    for pattern in compiled_regex_patterns:
-        for match in pattern.finditer(text):
-            found_index = match.start()
-            end_index = match.end()
-
-            # Check each token's character span; if it overlaps, mask it out.
-            for i, (token_start, token_end) in enumerate(
-                tokenized_text["offset_mapping"]
-            ):
-                if token_start < end_index and token_end > found_index:
-                    regex_mask_labels[i] = IGNORE_TOKEN_ID
-
-    return tokenized_text, regex_mask_labels
 
 
 class CustomGemma3PromptTokenizingStrategy(PromptTokenizingStrategy):
@@ -114,7 +88,7 @@ class CustomGemma3PromptTokenizingStrategy(PromptTokenizingStrategy):
             ) + f"<start_of_turn>{role_dict[turn['from']]}\n"
 
             # Tokenize and create mask out undesired tokens using regex patterns
-            tokenized_text, regex_mask_labels = mask_regex_attention_tokenizer(
+            tokenized_text, regex_labels = regex_attention_tokenizer(
                 tokenizer=self.tokenizer,
                 text=f"{prefix_text}{ftfy.fix_text(sharegpt_value).strip()}<end_of_turn>",
                 compiled_regex_patterns=COMPILED_REGEX_PATTERNS,
@@ -131,7 +105,7 @@ class CustomGemma3PromptTokenizingStrategy(PromptTokenizingStrategy):
                         "from": turn["from"],
                         "input_ids": tokenized_text["input_ids"],
                         "attention_mask": tokenized_text["attention_mask"],
-                        "labels": [IGNORE_TOKEN_ID] * len(regex_mask_labels),
+                        "labels": [IGNORE_TOKEN_ID] * len(regex_labels),
                     }
                 )
             # Handle partially masked model turn
@@ -150,7 +124,7 @@ class CustomGemma3PromptTokenizingStrategy(PromptTokenizingStrategy):
                         "attention_mask": tokenized_text["attention_mask"],
                         "labels": (
                             [IGNORE_TOKEN_ID] * prefix_token_count  # Mask the prefix
-                            + regex_mask_labels[prefix_token_count:]
+                            + regex_labels[prefix_token_count:]
                         ),
                     }
                 )
@@ -161,7 +135,7 @@ class CustomGemma3PromptTokenizingStrategy(PromptTokenizingStrategy):
                         "from": turn["from"],
                         "input_ids": tokenized_text["input_ids"],
                         "attention_mask": tokenized_text["attention_mask"],
-                        "labels": regex_mask_labels,
+                        "labels": regex_labels,
                     }
                 )
 
