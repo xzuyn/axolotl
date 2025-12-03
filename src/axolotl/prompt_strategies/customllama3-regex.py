@@ -57,34 +57,49 @@ class CustomLLaMa3PromptTokenizingStrategy(PromptTokenizingStrategy):
             "system": "system",
             "human": "user",
             "gpt": "assistant",
+            # Extra
             "human-chat": "user",
             "gpt-chat": "assistant",
+            # OpenAI/messages
+            "user": "user",
+            "assistant": "assistant",
         }
 
-        # Sometimes it gets named 'conversations' and other times 'conversation'
         if "conversations" in prompt:
             conversation_name = "conversations"
+            from_name = "from"
+            value_name = "value"
         elif "conversation" in prompt:
             conversation_name = "conversation"
+            from_name = "from"
+            value_name = "value"
+        elif "messages" in prompt:
+            conversation_name = "messages"
+            from_name = "role"
+            value_name = "content"
         else:
-            LOG.warning(f"sample does not contain 'conversations' or 'conversation'")
+            LOG.warning(
+                f"sample does not contain 'conversations' or 'conversation' or 'messages'"
+            )
             exit()
 
         # Iterate over each conversation turn in the prompt
         turn_segments = []
         for i, turn in enumerate(prompt[conversation_name]):
             try:
-                if turn["from"] in ["human-chat", "gpt-chat"]:
-                    sharegpt_value = f"{turn['name'].strip()}: {turn['value'].strip()}"
+                if turn[from_name] in ["human-chat", "gpt-chat"]:
+                    sharegpt_value = (
+                        f"{turn['name'].strip()}: {turn[value_name].strip()}"
+                    )
                 else:
-                    sharegpt_value = turn["value"].strip()
+                    sharegpt_value = turn[value_name].strip()
             except AttributeError:
                 LOG.warning(f"Processed sample will return empty due to AttributeError")
                 return {"input_ids": [], "attention_mask": [], "labels": []}
 
             # Get string which will be masked out if using train_on_inputs: false
             prefix_text = (
-                f"<|start_header_id|>{role_dict[turn['from']]}<|end_header_id|>\n\n"
+                f"<|start_header_id|>{role_dict[turn[from_name]]}<|end_header_id|>\n\n"
             )
 
             # Tokenize and create mask out undesired tokens using regex patterns
@@ -95,21 +110,24 @@ class CustomLLaMa3PromptTokenizingStrategy(PromptTokenizingStrategy):
             )
 
             # Handle masked user turn
-            if self.train_on_inputs is False and turn["from"] in [
+            if self.train_on_inputs is False and turn[from_name] in [
                 "system",
                 "human",
                 "human-chat",
             ]:
                 turn_segments.append(
                     {
-                        "from": turn["from"],
+                        from_name: turn[from_name],
                         "input_ids": tokenized_text["input_ids"],
                         "attention_mask": tokenized_text["attention_mask"],
                         "labels": [IGNORE_TOKEN_ID] * len(regex_labels),
                     }
                 )
             # Handle partially masked model turn
-            elif self.train_on_inputs is False and turn["from"] in ["gpt", "gpt-chat"]:
+            elif self.train_on_inputs is False and turn[from_name] in [
+                "gpt",
+                "gpt-chat",
+            ]:
                 prefix_token_count = 0
                 for start, end in tokenized_text["offset_mapping"]:
                     if end <= len(prefix_text):
@@ -119,7 +137,7 @@ class CustomLLaMa3PromptTokenizingStrategy(PromptTokenizingStrategy):
 
                 turn_segments.append(
                     {
-                        "from": turn["from"],
+                        from_name: turn[from_name],
                         "input_ids": tokenized_text["input_ids"],
                         "attention_mask": tokenized_text["attention_mask"],
                         "labels": (
@@ -132,7 +150,7 @@ class CustomLLaMa3PromptTokenizingStrategy(PromptTokenizingStrategy):
             else:
                 turn_segments.append(
                     {
-                        "from": turn["from"],
+                        from_name: turn[from_name],
                         "input_ids": tokenized_text["input_ids"],
                         "attention_mask": tokenized_text["attention_mask"],
                         "labels": regex_labels,
@@ -153,7 +171,7 @@ class CustomLLaMa3PromptTokenizingStrategy(PromptTokenizingStrategy):
                 current_length += turn_segment_length
 
         # Ensure the final turn is from gpt or gpt-chat
-        while trimmed_turn_segments and trimmed_turn_segments[-1]["from"] not in [
+        while trimmed_turn_segments and trimmed_turn_segments[-1][from_name] not in [
             "gpt",
             "gpt-chat",
         ]:
