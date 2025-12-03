@@ -75,3 +75,4 @@ posthog==6.7.11
 mistral-common==1.8.5
 
 ftfy
+google-re2
