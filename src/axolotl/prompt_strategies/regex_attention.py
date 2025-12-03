@@ -3,7 +3,6 @@ try:
 except ImportError:
     raise ImportError("You need re2. https://pypi.org/project/google-re2/")
 
-# TODO: Use word boundaries for all?
 REGEX_PATTERNS = [
     "(haze of|take your) pleasure",
     "(find|found)(|s|ing) solace in",

@@ -1,4 +1,4 @@
-"""Module containing the CustomChatMLPromptTokenizingStrategy class"""
+"""Module containing the CustomTekkenV7PromptTokenizingStrategy class"""
 
 # Import necessary modules and functions
 import re
@@ -27,9 +27,9 @@ LOG = logging.getLogger("axolotl")
 IGNORE_TOKEN_ID = -100
 
 
-class CustomChatMLPromptTokenizingStrategy(PromptTokenizingStrategy):
+class CustomTekkenV7PromptTokenizingStrategy(PromptTokenizingStrategy):
     """
-    Tokenizing strategy for CustomChatML.
+    Tokenizing strategy for CustomTekkenV7.
     """
 
     def __init__(
@@ -51,15 +51,15 @@ class CustomChatMLPromptTokenizingStrategy(PromptTokenizingStrategy):
 
         # ShareGPT-to-ChatML Dictionary
         role_dict = {
-            "system": "system",
-            "human": "user",
-            "gpt": "assistant",
+            "system": ["[SYSTEM_PROMPT]", "[/SYSTEM_PROMPT]"],
+            "human": ["[INST]", "[/INST]"],
+            "gpt": ["", "</s>"],
             # Extra
-            "human-chat": "user",
-            "gpt-chat": "assistant",
+            "human-chat": ["[INST]", "[/INST]"],
+            "gpt-chat": ["", "</s>"],
             # OpenAI/messages
-            "user": "user",
-            "assistant": "assistant",
+            "user": ["[INST]", "[/INST]"],
+            "assistant": ["", "</s>"],
         }
 
         if "conversations" in prompt:
@@ -95,14 +95,12 @@ class CustomChatMLPromptTokenizingStrategy(PromptTokenizingStrategy):
                 return {"input_ids": [], "attention_mask": [], "labels": []}
 
             # Get string which will be masked out if using train_on_inputs: false
-            prefix_text = (
-                "\n" if i != 0 else ""
-            ) + f"<|im_start|>{role_dict[turn[from_name]]}\n"
+            prefix_text = role_dict[turn[from_name]][0]
 
             # Tokenize and create mask out undesired tokens using regex patterns
             tokenized_text, regex_labels = regex_attention_tokenizer(
                 tokenizer=self.tokenizer,
-                text=f"{prefix_text}{ftfy.fix_text(sharegpt_value).strip()}<|im_end|>",
+                text=f"{prefix_text}{ftfy.fix_text(sharegpt_value).strip()}{role_dict[turn[from_name]][1]}",
             )
 
             # Handle masked user turn
@@ -213,8 +211,8 @@ class CustomChatMLPromptTokenizingStrategy(PromptTokenizingStrategy):
         }
 
 
-# Function to load the CustomChatMLPromptTokenizingStrategy
+# Function to load the CustomTekkenV7PromptTokenizingStrategy
 def load(tokenizer, cfg):
-    return CustomChatMLPromptTokenizingStrategy(
+    return CustomTekkenV7PromptTokenizingStrategy(
         None, tokenizer, cfg.train_on_inputs, cfg.sequence_len
     )

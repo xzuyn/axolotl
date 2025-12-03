@@ -108,6 +108,7 @@ class CustomLLaMa3PromptTokenizingStrategy(PromptTokenizingStrategy):
             # Handle masked user turn
             if self.train_on_inputs is False and turn[from_name] in [
                 "system",
+                "user",
                 "human",
                 "human-chat",
             ]:
@@ -121,6 +122,7 @@ class CustomLLaMa3PromptTokenizingStrategy(PromptTokenizingStrategy):
                 )
             # Handle partially masked model turn
             elif self.train_on_inputs is False and turn[from_name] in [
+                "assistant",
                 "gpt",
                 "gpt-chat",
             ]:
@@ -168,6 +170,7 @@ class CustomLLaMa3PromptTokenizingStrategy(PromptTokenizingStrategy):
 
         # Ensure the final turn is from gpt or gpt-chat
         while trimmed_turn_segments and trimmed_turn_segments[-1][from_name] not in [
+            "assistant",
             "gpt",
             "gpt-chat",
         ]:
