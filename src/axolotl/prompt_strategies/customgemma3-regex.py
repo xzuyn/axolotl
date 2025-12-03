@@ -13,10 +13,7 @@ import logging
 from axolotl.prompt_tokenizers import PromptTokenizingStrategy
 
 try:
-    from axolotl.prompt_strategies.regex_attention import (
-        COMPILED_REGEX_PATTERNS,
-        regex_attention_tokenizer,
-    )
+    from axolotl.prompt_strategies.regex_attention import regex_attention_tokenizer
 except ImportError:
     raise ImportError(
         "You need https://github.com/xzuyn/axolotl/blob/latest-formatters/src/axolotl/prompt_strategies/regex_attention.py"
@@ -106,7 +103,6 @@ class CustomGemma3PromptTokenizingStrategy(PromptTokenizingStrategy):
             tokenized_text, regex_labels = regex_attention_tokenizer(
                 tokenizer=self.tokenizer,
                 text=f"{prefix_text}{ftfy.fix_text(sharegpt_value).strip()}<end_of_turn>",
-                compiled_regex_patterns=COMPILED_REGEX_PATTERNS,
             )
 
             # Handle masked user turn

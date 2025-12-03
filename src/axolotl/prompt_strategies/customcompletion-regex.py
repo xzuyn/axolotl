@@ -13,10 +13,7 @@ import logging
 from axolotl.prompt_tokenizers import PromptTokenizingStrategy
 
 try:
-    from axolotl.prompt_strategies.regex_attention import (
-        COMPILED_REGEX_PATTERNS,
-        regex_attention_tokenizer,
-    )
+    from axolotl.prompt_strategies.regex_attention import regex_attention_tokenizer
 except ImportError:
     raise ImportError(
         "You need https://github.com/xzuyn/axolotl/blob/latest-formatters/src/axolotl/prompt_strategies/regex_attention.py"
@@ -55,7 +52,6 @@ class CustomCompletionPromptTokenizingStrategy(PromptTokenizingStrategy):
             tokenized_text, regex_labels = regex_attention_tokenizer(
                 tokenizer=self.tokenizer,
                 text=ftfy.fix_text(prompt[self.field]).strip(),
-                compiled_regex_patterns=COMPILED_REGEX_PATTERNS,
             )
         except AttributeError:
             LOG.warning(f"Processed sample will return empty due to AttributeError")
