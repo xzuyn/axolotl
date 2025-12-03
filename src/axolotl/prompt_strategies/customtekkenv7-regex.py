@@ -49,7 +49,7 @@ class CustomTekkenV7PromptTokenizingStrategy(PromptTokenizingStrategy):
         # Some tokenizers don't contain this, so if it doesn't exist assume it is set to True
         add_bos = getattr(self.tokenizer, "add_bos_token", True)
 
-        # ShareGPT-to-ChatML Dictionary
+        # ShareGPT-to-TekkenV7 Dictionary
         role_dict = {
             "system": ["[SYSTEM_PROMPT]", "[/SYSTEM_PROMPT]"],
             "human": ["[INST]", "[/INST]"],
