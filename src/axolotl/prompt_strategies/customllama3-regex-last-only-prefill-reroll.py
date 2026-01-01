@@ -3,8 +3,6 @@
 # Import necessary modules and functions
 import re
 
-from sympy.codegen.ast import continue_
-
 try:
     import ftfy
 except ImportError:
