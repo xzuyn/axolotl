@@ -81,13 +81,8 @@ class CustomLLaMa3PromptTokenizingStrategy(PromptTokenizingStrategy):
         turn_segments = []
         token_count = 0
         for i, turn in enumerate(prompt["prompt"]):
-            try:
-                sharegpt_value = turn.get("value")
-            except Exception as e:
-                LOG.warning(f"Processed sample will return empty due to: {e}")
-                return {"input_ids": [], "attention_mask": [], "labels": []}
-
             # Skip empty turns
+            sharegpt_value = turn.get("value")
             if sharegpt_value is None or sharegpt_value.strip() == "":
                 continue
 
