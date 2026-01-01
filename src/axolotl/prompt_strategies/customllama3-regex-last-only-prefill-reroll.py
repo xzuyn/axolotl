@@ -113,7 +113,6 @@ class CustomLLaMa3PromptTokenizingStrategy(PromptTokenizingStrategy):
                 }
             )
 
-        # Iterate over each conversation turn in the prompt
         turn_segments = []
         token_count = 0
         for i, turn in enumerate(prompt["prompt"]):
@@ -123,35 +122,49 @@ class CustomLLaMa3PromptTokenizingStrategy(PromptTokenizingStrategy):
                 LOG.warning(f"Processed sample will return empty due to: {e}")
                 return {"input_ids": [], "attention_mask": [], "labels": []}
 
-            # Get string which will be masked out if using train_on_inputs: false
             prefix_text = "<|start_header_id|>" + role_dict[turn["from"]] + "<|end_header_id|>\n\n"
 
-            # Add prefill to prefix_text if it exists
-            prefix_text += turn.get("prefill", "")
-
-            # Tokenize and create mask out undesired tokens using regex patterns
-            tokenized_text, regex_labels = regex_attention_tokenizer(
-                tokenizer=self.tokenizer,
-                text=f"{prefix_text}{sharegpt_value}<|eot_id|>",
-            )
-
-            # Skip processing early if over token limit
-            token_count += len(tokenized_text["input_ids"])
-            if token_count >= self.sequence_len:
-                return {"input_ids": [], "attention_mask": [], "labels": []}
-
-            
-            # Handle masked turn (every turn except the last turn)
+            # All turns except the final turn
             if i != len(prompt["prompt"]) - 1:
+                # Use non-regex tokenizer cause its faster. Only final turn needs regex
+                tokenized_text = self.tokenizer(
+                    text=f"{prefix_text}{sharegpt_value}<|eot_id|>",
+                    add_special_tokens=False,
+                    truncation=False,
+                    padding=False,
+                    return_tensors=None,
+                    return_offsets_mapping=True,
+                )
+
+                # Skip processing early if over token limit
+                token_count += len(tokenized_text["input_ids"])
+                if token_count >= self.sequence_len:
+                    return {"input_ids": [], "attention_mask": [], "labels": []}
+
+                # Add masked turn to turn segments
                 turn_segments.append(
                     {
                         "input_ids": tokenized_text["input_ids"],
                         "attention_mask": tokenized_text["attention_mask"],
-                        "labels": [IGNORE_TOKEN_ID] * len(regex_labels),
+                        "labels": [IGNORE_TOKEN_ID] * len(tokenized_text["input_ids"]),
                     }
                 )
-            # Handle partially masked turn (only the last turn)
+            # Final turn
             else:
+                # Add prefill to prefix_text if it exists
+                prefix_text += turn.get("prefill", "")
+
+                # Tokenize and create mask out undesired tokens using regex patterns
+                tokenized_text, regex_labels = regex_attention_tokenizer(
+                    tokenizer=self.tokenizer,
+                    text=f"{prefix_text}{sharegpt_value}<|eot_id|>",
+                )
+
+                # Skip processing early if over token limit
+                token_count += len(tokenized_text["input_ids"])
+                if token_count >= self.sequence_len:
+                    return {"input_ids": [], "attention_mask": [], "labels": []}
+
                 prefix_token_count = 0
                 for start, end in tokenized_text["offset_mapping"]:
                     if end <= len(prefix_text):
@@ -159,6 +172,7 @@ class CustomLLaMa3PromptTokenizingStrategy(PromptTokenizingStrategy):
                     else:
                         break
 
+                # Add partially masked turn to turn segments
                 turn_segments.append(
                     {
                         "input_ids": tokenized_text["input_ids"],
