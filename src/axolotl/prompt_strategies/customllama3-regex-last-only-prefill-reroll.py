@@ -49,11 +49,7 @@ class CustomLLaMa3PromptTokenizingStrategy(PromptTokenizingStrategy):
         )
 
     def tokenize_prompt(self, prompt):
-        # Skip sample if average response length is less than 3 or more than 1024 tokens
-        if 1024 < prompt["response_average_tokens"] < 3:
-            return {"input_ids": [], "attention_mask": [], "labels": []}
-        
-        if len(prompt["prompt"]) <= 2:
+        if len(prompt["prompt"]) <= 2 or (1024 < prompt["response_average_tokens"] < 3):
             return {"input_ids": [], "attention_mask": [], "labels": []}
 
         # Some tokenizers don't contain this, so if it doesn't exist assume it is set to True
