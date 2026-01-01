@@ -103,7 +103,10 @@ class CustomLLaMa3PromptTokenizingStrategy(PromptTokenizingStrategy):
                 # Add prefill to prefix_text if it exists
                 prefill_text = turn.get("prefill")
                 if prefill_text is not None and prefill_text.strip() != "":
+                    prefix_token_count = 1  # Sometimes it seems to miss by 1 with prefill, so mask 1 extra
                     prefix_text += prefill_text
+                else:
+                    prefix_token_count = 0
 
                 # Tokenize and create mask out undesired tokens using regex patterns
                 tokenized_text, regex_labels = regex_attention_tokenizer(
@@ -116,7 +119,6 @@ class CustomLLaMa3PromptTokenizingStrategy(PromptTokenizingStrategy):
                 if token_count >= self.sequence_len:
                     return {"input_ids": [], "attention_mask": [], "labels": []}
 
-                prefix_token_count = 0
                 for start, end in tokenized_text["offset_mapping"]:
                     if end <= len(prefix_text):
                         prefix_token_count += 1
