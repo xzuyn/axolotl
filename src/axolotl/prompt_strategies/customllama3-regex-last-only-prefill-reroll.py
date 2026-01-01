@@ -1,0 +1,209 @@
+"""Module containing the CustomLLaMa3PromptTokenizingStrategy class"""
+
+# Import necessary modules and functions
+import re
+
+from sympy.codegen.ast import continue_
+
+try:
+    import ftfy
+except ImportError:
+    raise ImportError("You need ftfy. https://pypi.org/project/ftfy/")
+import logging
+import random
+
+# Import from axolotl package
+from axolotl.prompt_tokenizers import PromptTokenizingStrategy
+
+try:
+    from axolotl.prompt_strategies.regex_attention import regex_attention_tokenizer
+except ImportError:
+    raise ImportError(
+        "You need https://github.com/xzuyn/axolotl/blob/latest-formatters/src/axolotl/prompt_strategies/regex_attention.py"
+    )
+
+
+# Set up logging
+LOG = logging.getLogger("axolotl")
+
+# Define a constant token ID to ignore
+IGNORE_TOKEN_ID = -100
+
+
+class CustomLLaMa3PromptTokenizingStrategy(PromptTokenizingStrategy):
+    """
+    Tokenizing strategy for CustomLLaMa3.
+    """
+
+    def __init__(
+        self, prompter, tokenizer, train_on_inputs, sequence_len, *args, **kwargs
+    ):
+        # Call the superclass' constructor
+        super().__init__(
+            prompter=prompter,
+            tokenizer=tokenizer,
+            train_on_inputs=train_on_inputs,
+            sequence_len=sequence_len,
+            *args,
+            **kwargs,
+        )
+
+    def tokenize_prompt(self, prompt):
+        # Skip sample if average response length is less than 3 or more than 1024 tokens
+        if 1024 < prompt["response_average_tokens"] < 3:
+            return {"input_ids": [], "attention_mask": [], "labels": []}
+
+        # Some tokenizers don't contain this, so if it doesn't exist assume it is set to True
+        add_bos = getattr(self.tokenizer, "add_bos_token", True)
+
+        # ShareGPT-to-LLaMa3 Dictionary
+        role_dict = {
+            "system": "system",
+            "human": "user",
+            "gpt": "assistant",
+            # Extra
+            "human-chat": "user",
+            "gpt-chat": "assistant",
+            # OpenAI/messages
+            "user": "user",
+            "assistant": "assistant",
+        }
+
+        if len(prompt["prompt"]) <= 2:
+            return {"input_ids": [], "attention_mask": [], "labels": []}
+
+        best_prefill = None
+        best_response = None
+        best_slop_ratio = None
+        for response in prompt["responses"]:
+            if response["slop_ratio"] is None:
+                continue
+
+            # Skip if response length is less than 3 or more than 1024 tokens
+            if 1024 < response["response_tokens"] < 3:
+                continue
+
+            if best_response is None:
+                best_prefill = response.get("prefill")
+                best_response = response["response"]
+                best_slop_ratio = response["slop_ratio"]
+                continue
+
+            if response["slop_ratio"] < best_slop_ratio:
+                best_prefill = response.get("prefill")
+                best_response = response["response"]
+                best_slop_ratio = response["slop_ratio"]
+
+        if best_response is None:
+            return {"input_ids": [], "attention_mask": [], "labels": []}
+
+        if best_prefill is not None:
+            prompt["prompt"].append(
+                {
+                    "from": "gpt",
+                    "prefill": best_prefill,
+                    "value": best_response
+                }
+            )
+        else:
+            prompt["prompt"].append(
+                {
+                    "from": "gpt",
+                    "value": best_response
+                }
+            )
+
+        # Iterate over each conversation turn in the prompt
+        turn_segments = []
+        token_count = 0
+        for i, turn in enumerate(prompt["prompt"]):
+            try:
+                sharegpt_value = turn["value"]
+            except Exception as e:
+                LOG.warning(f"Processed sample will return empty due to: {e}")
+                return {"input_ids": [], "attention_mask": [], "labels": []}
+
+            # Get string which will be masked out if using train_on_inputs: false
+            prefix_text = "<|start_header_id|>" + role_dict[turn["from"]] + "<|end_header_id|>\n\n"
+
+            # Add prefill to prefix_text if it exists
+            prefix_text += turn.get("prefill", "")
+
+            # Tokenize and create mask out undesired tokens using regex patterns
+            tokenized_text, regex_labels = regex_attention_tokenizer(
+                tokenizer=self.tokenizer,
+                text=f"{prefix_text}{sharegpt_value}<|eot_id|>",
+            )
+
+            # Skip processing early if over token limit
+            token_count += len(tokenized_text["input_ids"])
+            if token_count >= self.sequence_len:
+                return {"input_ids": [], "attention_mask": [], "labels": []}
+
+            
+            # Handle masked turn (every turn except the last turn)
+            if i != len(prompt["prompt"]) - 1:
+                turn_segments.append(
+                    {
+                        "input_ids": tokenized_text["input_ids"],
+                        "attention_mask": tokenized_text["attention_mask"],
+                        "labels": [IGNORE_TOKEN_ID] * len(regex_labels),
+                    }
+                )
+            # Handle partially masked turn (only the last turn)
+            else:
+                prefix_token_count = 0
+                for start, end in tokenized_text["offset_mapping"]:
+                    if end <= len(prefix_text):
+                        prefix_token_count += 1
+                    else:
+                        break
+
+                turn_segments.append(
+                    {
+                        "input_ids": tokenized_text["input_ids"],
+                        "attention_mask": tokenized_text["attention_mask"],
+                        "labels": (
+                            [IGNORE_TOKEN_ID] * prefix_token_count  # Mask the prefix
+                            + regex_labels[prefix_token_count:]
+                        ),
+                    }
+                )
+
+        # Combine all the turn segments
+        input_ids, attention_mask, labels = [], [], []
+        for turn_segment in turn_segments:
+            input_ids.extend(turn_segment["input_ids"])
+            attention_mask.extend(turn_segment["attention_mask"])
+            labels.extend(turn_segment["labels"])
+
+        # Add missing BOS token if needed
+        if (
+            add_bos
+            and self.tokenizer.bos_token_id
+            and input_ids[0] != self.tokenizer.bos_token_id
+        ):
+            input_ids.insert(0, self.tokenizer.bos_token_id)
+            attention_mask.insert(0, 1)
+            labels.insert(0, IGNORE_TOKEN_ID)
+
+        # Training on samples with all tokens masked is a waste of compute
+        # May be worth checking if less than X% of tokens are trainable too
+        if all(label == IGNORE_TOKEN_ID for label in labels):
+            LOG.warning(
+                f"Processed sample will return empty due to no trainable tokens after masking"
+            )
+            return {"input_ids": [], "attention_mask": [], "labels": []}
+
+        return {
+            "input_ids": input_ids,
+            "attention_mask": attention_mask,
+            "labels": labels,
+        }
+
+
+# Function to load the CustomLLaMa3PromptTokenizingStrategy
+def load(tokenizer, cfg):
+    return CustomLLaMa3PromptTokenizingStrategy(
+        None, tokenizer, cfg.train_on_inputs, cfg.sequence_len
+    )
