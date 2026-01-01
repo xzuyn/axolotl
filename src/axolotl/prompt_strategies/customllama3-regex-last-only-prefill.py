@@ -57,7 +57,7 @@ class CustomLLaMa3PromptTokenizingStrategy(PromptTokenizingStrategy):
             "gpt-chat": "assistant",
         }
 
-        response_prefill = prompt.get("response_prefill"):
+        response_prefill = prompt.get("response_prefill")
         if response_prefill is not None and response_prefill.strip() != "":
             prompt["prompt"][-1]["prefill"] = response_prefill
 
