@@ -97,21 +97,13 @@ class CustomLLaMa3PromptTokenizingStrategy(PromptTokenizingStrategy):
         if best_response is None:
             return {"input_ids": [], "attention_mask": [], "labels": []}
 
-        if best_prefill is not None:
-            prompt["prompt"].append(
-                {
-                    "from": "gpt",
-                    "prefill": best_prefill,
-                    "value": best_response
-                }
-            )
-        else:
-            prompt["prompt"].append(
-                {
-                    "from": "gpt",
-                    "value": best_response
-                }
-            )
+        prompt["prompt"].append(
+            {
+                "from": "gpt",
+                "prefill": "" if best_prefill is None else best_prefill,
+                "value": best_response
+            }
+        )
 
         turn_segments = []
         token_count = 0
