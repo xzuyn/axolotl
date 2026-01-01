@@ -124,7 +124,7 @@ class CustomLLaMa3PromptTokenizingStrategy(PromptTokenizingStrategy):
             else:
                 # Add prefill to prefix_text if it exists
                 prefill_text = turn.get("prefill")
-                if prefill_text is not None:
+                if prefill_text is not None and prefill_text.strip() != "":
                     prefix_text += prefill_text
 
                 # Tokenize and create mask out undesired tokens using regex patterns
