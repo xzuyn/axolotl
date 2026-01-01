@@ -52,6 +52,9 @@ class CustomLLaMa3PromptTokenizingStrategy(PromptTokenizingStrategy):
         # Skip sample if average response length is less than 3 or more than 1024 tokens
         if 1024 < prompt["response_average_tokens"] < 3:
             return {"input_ids": [], "attention_mask": [], "labels": []}
+        
+        if len(prompt["prompt"]) <= 2:
+            return {"input_ids": [], "attention_mask": [], "labels": []}
 
         # Some tokenizers don't contain this, so if it doesn't exist assume it is set to True
         add_bos = getattr(self.tokenizer, "add_bos_token", True)
@@ -59,48 +62,35 @@ class CustomLLaMa3PromptTokenizingStrategy(PromptTokenizingStrategy):
         # ShareGPT-to-LLaMa3 Dictionary
         role_dict = {
             "system": "system",
-            "human": "user",
-            "gpt": "assistant",
-            # Extra
-            "human-chat": "user",
-            "gpt-chat": "assistant",
-            # OpenAI/messages
             "user": "user",
+            "human": "user",
+            "human-chat": "user",
             "assistant": "assistant",
+            "gpt": "assistant",
+            "gpt-chat": "assistant",
         }
-
-        if len(prompt["prompt"]) <= 2:
-            return {"input_ids": [], "attention_mask": [], "labels": []}
 
         best_prefill = None
         best_response = None
-        best_slop_ratio = None
+        best_slop_ratio = 1.0
         for response in prompt["responses"]:
-            if response["slop_ratio"] is None:
+            slop_ratio = response.get("slop_ratio")
+            response_tokens = response.get("response_tokens")
+            if slop_ratio is None or response_tokens is None:
                 continue
 
-            # Skip if response length is less than 3 or more than 1024 tokens
-            if 1024 < response["response_tokens"] < 3:
-                continue
-
-            if best_response is None:
+            if 1024 >= response_tokens >= 3 and slop_ratio < best_slop_ratio:
                 best_prefill = response.get("prefill")
-                best_response = response["response"]
-                best_slop_ratio = response["slop_ratio"]
-                continue
+                best_response = response.get("response")
+                best_slop_ratio = slop_ratio
 
-            if response["slop_ratio"] < best_slop_ratio:
-                best_prefill = response.get("prefill")
-                best_response = response["response"]
-                best_slop_ratio = response["slop_ratio"]
-
-        if best_response is None:
+        if best_response is None or best_response == "" or best_slop_ratio == 1.0:
             return {"input_ids": [], "attention_mask": [], "labels": []}
 
         prompt["prompt"].append(
             {
                 "from": "gpt",
-                "prefill": "" if best_prefill is None else best_prefill,
+                "prefill": best_prefill,
                 "value": best_response
             }
         )
@@ -109,12 +99,16 @@ class CustomLLaMa3PromptTokenizingStrategy(PromptTokenizingStrategy):
         token_count = 0
         for i, turn in enumerate(prompt["prompt"]):
             try:
-                sharegpt_value = turn["value"]
+                sharegpt_value = turn.get("value")
             except Exception as e:
                 LOG.warning(f"Processed sample will return empty due to: {e}")
                 return {"input_ids": [], "attention_mask": [], "labels": []}
 
-            prefix_text = "<|start_header_id|>" + role_dict[turn["from"]] + "<|end_header_id|>\n\n"
+            # Skip empty turns
+            if sharegpt_value is None or sharegpt_value.strip() == "":
+                continue
+
+            prefix_text = f"<|start_header_id|>{role_dict[turn['from']]}<|end_header_id|>\n\n"
 
             # All turns except the final turn
             if i != len(prompt["prompt"]) - 1:
@@ -144,7 +138,9 @@ class CustomLLaMa3PromptTokenizingStrategy(PromptTokenizingStrategy):
             # Final turn
             else:
                 # Add prefill to prefix_text if it exists
-                prefix_text += turn.get("prefill", "")
+                prefill_text = turn.get("prefill")
+                if prefill_text is not None:
+                    prefix_text += prefill_text
 
                 # Tokenize and create mask out undesired tokens using regex patterns
                 tokenized_text, regex_labels = regex_attention_tokenizer(
