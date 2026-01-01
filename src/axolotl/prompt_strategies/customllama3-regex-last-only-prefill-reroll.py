@@ -2,15 +2,8 @@
 
 # Import necessary modules and functions
 import re
-
-try:
-    import ftfy
-except ImportError:
-    raise ImportError("You need ftfy. https://pypi.org/project/ftfy/")
 import logging
 import random
-
-# Import from axolotl package
 from axolotl.prompt_tokenizers import PromptTokenizingStrategy
 
 try:
@@ -82,11 +75,7 @@ class CustomLLaMa3PromptTokenizingStrategy(PromptTokenizingStrategy):
             return {"input_ids": [], "attention_mask": [], "labels": []}
 
         prompt["prompt"].append(
-            {
-                "from": "gpt",
-                "prefill": best_prefill,
-                "value": best_response
-            }
+            {"from": "gpt", "prefill": best_prefill, "value": best_response}
         )
 
         turn_segments = []
@@ -102,7 +91,9 @@ class CustomLLaMa3PromptTokenizingStrategy(PromptTokenizingStrategy):
             if sharegpt_value is None or sharegpt_value.strip() == "":
                 continue
 
-            prefix_text = f"<|start_header_id|>{role_dict[turn['from']]}<|end_header_id|>\n\n"
+            prefix_text = (
+                f"<|start_header_id|>{role_dict[turn['from']]}<|end_header_id|>\n\n"
+            )
 
             # All turns except the final turn
             if i != len(prompt["prompt"]) - 1:
