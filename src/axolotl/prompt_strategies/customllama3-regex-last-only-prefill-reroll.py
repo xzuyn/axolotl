@@ -63,10 +63,17 @@ class CustomLLaMa3PromptTokenizingStrategy(PromptTokenizingStrategy):
         for response in prompt["responses"]:
             slop_ratio = response.get("slop_ratio")
             response_tokens = response.get("response_tokens")
-            if slop_ratio is None or response_tokens is None:
+            minos_prediction = response.get("minos_prediction")
+            minos_confidence = response.get("minos_confidence")
+            if slop_ratio is None or response_tokens is None or minos_prediction is None or minos_confidence is None:
                 continue
 
-            if 1024 >= response_tokens >= 3 and slop_ratio < best_slop_ratio:
+            if (
+                slop_ratio < best_slop_ratio
+                and 1024 >= response_tokens >= 3
+                and minos_prediction == "non-refusal"
+                and minos_confidence > 0.8
+            ):
                 best_prefill = response.get("prefill")
                 best_response = response.get("response")
                 best_slop_ratio = slop_ratio
