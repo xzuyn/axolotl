@@ -66,7 +66,6 @@ def parse_requirements(extras_require_map):
                 extras_require_map.pop("fbgemm-gpu")
                 extras_require_map["fbgemm-gpu"] = ["fbgemm-gpu-genai==1.4.1"]
                 extras_require_map["vllm"] = ["vllm==0.11.1"]
-                _install_requires.pop(_install_requires.index(xformers_version))
             elif (major, minor) >= (2, 8):
                 extras_require_map.pop("fbgemm-gpu")
                 extras_require_map["fbgemm-gpu"] = ["fbgemm-gpu-genai==1.3.0"]
@@ -157,7 +156,7 @@ extras_require = {
         "came_pytorch==0.1.3",
     ],
     "ray": [
-        "ray[train]",
+        "ray[train]>=2.52.1",
     ],
     "vllm": [
         "vllm==0.10.0",
