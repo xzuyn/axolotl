@@ -162,7 +162,7 @@ class CustomGemma4PromptTokenizingStrategy(PromptTokenizingStrategy):
 
         # Combine all the turn segments
         input_ids, attention_mask, labels = [], [], []
-        for turn_segment in trimmed_turn_segments:
+        for turn_segment in turn_segments:
             input_ids.extend(turn_segment["input_ids"])
             attention_mask.extend(turn_segment["attention_mask"])
             labels.extend(turn_segment["labels"])
