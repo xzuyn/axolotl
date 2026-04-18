@@ -1,8 +1,5 @@
 """Module containing the CustomCompletionPromptTokenizingStrategy class"""
 
-# Import necessary modules and functions
-import re
-
 try:
     import ftfy
 except ImportError:
