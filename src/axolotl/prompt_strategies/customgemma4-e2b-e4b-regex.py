@@ -44,9 +44,7 @@ class CustomGemma4PromptTokenizingStrategy(PromptTokenizingStrategy):
 
     def tokenize_prompt(self, prompt):
         try:
-            # Some tokenizers don't contain this, so if it doesn't exist assume it is set to True
-            # add_bos = getattr(self.tokenizer, "add_bos_token", True)
-            add_bos = True
+            input_ids, attention_mask, labels = [self.tokenizer.bos_token_id], [1], [IGNORE_TOKEN_ID]
 
             # ShareGPT-to-Gemma4 Dictionary
             role_dict = {
@@ -151,21 +149,10 @@ class CustomGemma4PromptTokenizingStrategy(PromptTokenizingStrategy):
                     )
 
             # Combine all the turn segments
-            input_ids, attention_mask, labels = [], [], []
             for turn_segment in turn_segments:
                 input_ids.extend(turn_segment["input_ids"])
                 attention_mask.extend(turn_segment["attention_mask"])
                 labels.extend(turn_segment["labels"])
-
-            # Add missing BOS token if needed
-            if (
-                add_bos
-                and self.tokenizer.bos_token_id
-                and input_ids[0] != self.tokenizer.bos_token_id
-            ):
-                input_ids.insert(0, self.tokenizer.bos_token_id)
-                attention_mask.insert(0, 1)
-                labels.insert(0, IGNORE_TOKEN_ID)
 
             # Training on samples with all tokens masked is a waste of compute
             # May be worth checking if less than X% of tokens are trainable too

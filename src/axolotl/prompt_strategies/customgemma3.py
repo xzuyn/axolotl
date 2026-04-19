@@ -1,4 +1,4 @@
-"""Module containing the CustomGemma4PromptTokenizingStrategy class"""
+"""Module containing the CustomGemma3PromptTokenizingStrategy class"""
 
 try:
     import ftfy
@@ -17,9 +17,9 @@ LOG = logging.getLogger("axolotl")
 IGNORE_TOKEN_ID = -100
 
 
-class CustomGemma4PromptTokenizingStrategy(PromptTokenizingStrategy):
+class CustomGemma3PromptTokenizingStrategy(PromptTokenizingStrategy):
     """
-    Tokenizing strategy for CustomGemma4.
+    Tokenizing strategy for CustomGemma3.
     """
 
     def __init__(
@@ -39,7 +39,7 @@ class CustomGemma4PromptTokenizingStrategy(PromptTokenizingStrategy):
         try:
             input_ids, attention_mask, labels = [self.tokenizer.bos_token_id], [1], [IGNORE_TOKEN_ID]
 
-            # ShareGPT-to-Gemma4 Dictionary
+            # ShareGPT-to-Gemma3 Dictionary
             role_dict = {
                 "system": "system",
                 "human": "user",
@@ -83,11 +83,11 @@ class CustomGemma4PromptTokenizingStrategy(PromptTokenizingStrategy):
                 # Get string which will be masked out if using train_on_inputs: false
                 prefix_text = (
                     "\n" if i != 0 else ""
-                ) + f"<|turn>{role_dict[turn[from_name]]}\n"
+                ) + f"<start_of_turn>{role_dict[turn[from_name]]}\n"
 
                 # Tokenize
                 tokenized_text = self.tokenizer(
-                    text=f"{prefix_text}{sharegpt_value}<turn|>",
+                    text=f"{prefix_text}{sharegpt_value}<end_of_turn>",
                     add_special_tokens=False,
                     truncation=False,
                     padding=False,
@@ -146,8 +146,32 @@ class CustomGemma4PromptTokenizingStrategy(PromptTokenizingStrategy):
                         }
                     )
 
-            # Combine all the turn segments
+            # Only keep turns which add up to less than sequence_len
+            current_length = 1
+            trimmed_turn_segments = []
             for turn_segment in turn_segments:
+                turn_segment_length = len(turn_segment["input_ids"])
+                if current_length + turn_segment_length > self.sequence_len:
+                    break
+                else:
+                    trimmed_turn_segments.append(turn_segment)
+                    current_length += turn_segment_length
+
+            # Ensure the final turn is from gpt or gpt-chat
+            while trimmed_turn_segments and trimmed_turn_segments[-1][from_name] not in [
+                "assistant",
+                "gpt",
+                "gpt-chat",
+            ]:
+                trimmed_turn_segments.pop()
+
+            # Return empty if there are less than 2 turns left
+            if len(trimmed_turn_segments) < 2:
+                # LOG.warning(f"Processed sample will return empty due to not enough turns")  # This spams
+                return {"input_ids": [], "attention_mask": [], "labels": []}
+
+            # Combine all the turn segments
+            for turn_segment in trimmed_turn_segments:
                 input_ids.extend(turn_segment["input_ids"])
                 attention_mask.extend(turn_segment["attention_mask"])
                 labels.extend(turn_segment["labels"])
@@ -170,8 +194,8 @@ class CustomGemma4PromptTokenizingStrategy(PromptTokenizingStrategy):
             return {"input_ids": [], "attention_mask": [], "labels": []}
 
 
-# Function to load the CustomGemma4PromptTokenizingStrategy
+# Function to load the CustomGemma3PromptTokenizingStrategy
 def load(tokenizer, cfg):
-    return CustomGemma4PromptTokenizingStrategy(
+    return CustomGemma3PromptTokenizingStrategy(
         None, tokenizer, cfg.train_on_inputs, cfg.sequence_len
     )

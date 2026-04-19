@@ -44,9 +44,7 @@ class CustomGemma3PromptTokenizingStrategy(PromptTokenizingStrategy):
 
     def tokenize_prompt(self, prompt):
         try:
-            # Some tokenizers don't contain this, so if it doesn't exist assume it is set to True
-            # add_bos = getattr(self.tokenizer, "add_bos_token", True)
-            add_bos = True
+            input_ids, attention_mask, labels = [self.tokenizer.bos_token_id], [1], [IGNORE_TOKEN_ID]
 
             # ShareGPT-to-Gemma3 Dictionary
             role_dict = {
@@ -150,14 +148,12 @@ class CustomGemma3PromptTokenizingStrategy(PromptTokenizingStrategy):
                         }
                     )
 
-            # Only keep turns which add up to less than sequence_len (or seq_len - 1 if bos is set)
-            current_length = 0
+            # Only keep turns which add up to less than sequence_len
+            current_length = 1
             trimmed_turn_segments = []
             for turn_segment in turn_segments:
                 turn_segment_length = len(turn_segment["input_ids"])
-                if current_length + turn_segment_length > self.sequence_len - (
-                    1 if add_bos and self.tokenizer.bos_token_id else 0
-                ):
+                if current_length + turn_segment_length > self.sequence_len:
                     break
                 else:
                     trimmed_turn_segments.append(turn_segment)
@@ -177,21 +173,10 @@ class CustomGemma3PromptTokenizingStrategy(PromptTokenizingStrategy):
                 return {"input_ids": [], "attention_mask": [], "labels": []}
 
             # Combine all the turn segments
-            input_ids, attention_mask, labels = [], [], []
             for turn_segment in trimmed_turn_segments:
                 input_ids.extend(turn_segment["input_ids"])
                 attention_mask.extend(turn_segment["attention_mask"])
                 labels.extend(turn_segment["labels"])
-
-            # Add missing BOS token if needed
-            if (
-                add_bos
-                and self.tokenizer.bos_token_id
-                and input_ids[0] != self.tokenizer.bos_token_id
-            ):
-                input_ids.insert(0, self.tokenizer.bos_token_id)
-                attention_mask.insert(0, 1)
-                labels.insert(0, IGNORE_TOKEN_ID)
 
             # Training on samples with all tokens masked is a waste of compute
             # May be worth checking if less than X% of tokens are trainable too
