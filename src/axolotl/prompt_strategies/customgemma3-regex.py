@@ -44,7 +44,12 @@ class CustomGemma3PromptTokenizingStrategy(PromptTokenizingStrategy):
 
     def tokenize_prompt(self, prompt):
         try:
-            input_ids, attention_mask, labels = [self.tokenizer.bos_token_id], [1], [IGNORE_TOKEN_ID]
+            all_input_ids, all_attention_mask, all_labels, all_token_type_ids = (
+                [self.tokenizer.bos_token_id],
+                [1],
+                [IGNORE_TOKEN_ID],
+                [0]
+            )
 
             # ShareGPT-to-Gemma3 Dictionary
             role_dict = {
@@ -170,30 +175,31 @@ class CustomGemma3PromptTokenizingStrategy(PromptTokenizingStrategy):
             # Return empty if there are less than 2 turns left
             if len(trimmed_turn_segments) < 2:
                 # LOG.warning(f"Processed sample will return empty due to not enough turns")  # This spams
-                return {"input_ids": [], "attention_mask": [], "labels": []}
+                return {"input_ids": [], "attention_mask": [], "labels": [], "token_type_ids": []}
 
             # Combine all the turn segments
             for turn_segment in trimmed_turn_segments:
-                input_ids.extend(turn_segment["input_ids"])
-                attention_mask.extend(turn_segment["attention_mask"])
-                labels.extend(turn_segment["labels"])
+                all_input_ids.extend(turn_segment["input_ids"])
+                all_attention_mask.extend(turn_segment["attention_mask"])
+                all_labels.extend(turn_segment["labels"])
 
             # Training on samples with all tokens masked is a waste of compute
             # May be worth checking if less than X% of tokens are trainable too
-            if all(label == IGNORE_TOKEN_ID for label in labels):
+            if all(label == IGNORE_TOKEN_ID for label in all_labels):
                 LOG.warning(
                     f"Processed sample will return empty due to no trainable tokens after masking"
                 )
-                return {"input_ids": [], "attention_mask": [], "labels": []}
+                return {"input_ids": [], "attention_mask": [], "labels": [], "token_type_ids": []}
 
             return {
-                "input_ids": input_ids,
-                "attention_mask": attention_mask,
-                "labels": labels,
+                "input_ids": all_input_ids,
+                "attention_mask": all_attention_mask,
+                "labels": all_labels,
+                "token_type_ids": [0] * len(all_labels),
             }
         except Exception as e:
             LOG.warning(e)
-            return {"input_ids": [], "attention_mask": [], "labels": []}
+            return {"input_ids": [], "attention_mask": [], "labels": [], "token_type_ids": []}
 
 
 # Function to load the CustomGemma3PromptTokenizingStrategy

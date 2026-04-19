@@ -44,7 +44,11 @@ class CustomGemma4PromptTokenizingStrategy(PromptTokenizingStrategy):
 
     def tokenize_prompt(self, prompt):
         try:
-            input_ids, attention_mask, labels = [self.tokenizer.bos_token_id], [1], [IGNORE_TOKEN_ID]
+            all_input_ids, all_attention_mask, all_labels = (
+                [self.tokenizer.bos_token_id],
+                [1],
+                [IGNORE_TOKEN_ID]
+            )
 
             # ShareGPT-to-Gemma4 Dictionary
             role_dict = {
@@ -150,22 +154,22 @@ class CustomGemma4PromptTokenizingStrategy(PromptTokenizingStrategy):
 
             # Combine all the turn segments
             for turn_segment in turn_segments:
-                input_ids.extend(turn_segment["input_ids"])
-                attention_mask.extend(turn_segment["attention_mask"])
-                labels.extend(turn_segment["labels"])
+                all_input_ids.extend(turn_segment["input_ids"])
+                all_attention_mask.extend(turn_segment["attention_mask"])
+                all_labels.extend(turn_segment["labels"])
 
             # Training on samples with all tokens masked is a waste of compute
             # May be worth checking if less than X% of tokens are trainable too
-            if all(label == IGNORE_TOKEN_ID for label in labels):
+            if all(label == IGNORE_TOKEN_ID for label in all_labels):
                 LOG.warning(
                     f"Processed sample will return empty due to no trainable tokens after masking"
                 )
                 return {"input_ids": [], "attention_mask": [], "labels": []}
 
             return {
-                "input_ids": input_ids,
-                "attention_mask": attention_mask,
-                "labels": labels,
+                "input_ids": all_input_ids,
+                "attention_mask": all_attention_mask,
+                "labels": all_labels,
             }
         except Exception as e:
             LOG.warning(e)
