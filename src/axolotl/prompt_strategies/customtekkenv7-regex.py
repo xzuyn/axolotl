@@ -44,12 +44,15 @@ class CustomTekkenV7PromptTokenizingStrategy(PromptTokenizingStrategy):
 
     def tokenize_prompt(self, prompt):
         try:
-            all_input_ids, all_attention_mask, all_labels, all_token_type_ids = (
-                [self.tokenizer.bos_token_id],
-                [1],
-                [IGNORE_TOKEN_ID],
-                [0]
-            )
+            if self.tokenizer.bos_token_id is not None:
+                all_input_ids, all_attention_mask, all_labels, all_token_type_ids = (
+                    [self.tokenizer.bos_token_id],
+                    [1],
+                    [IGNORE_TOKEN_ID],
+                    [0]
+                )
+            else:
+                all_input_ids, all_attention_mask, all_labels, all_token_type_ids = [], [], [], []
 
             # ShareGPT-to-TekkenV7 Dictionary
             role_dict = {
@@ -152,7 +155,7 @@ class CustomTekkenV7PromptTokenizingStrategy(PromptTokenizingStrategy):
                     )
 
             # Only keep turns which add up to less than sequence_len
-            current_length = 1
+            current_length = len(all_labels)
             trimmed_turn_segments = []
             for turn_segment in turn_segments:
                 turn_segment_length = len(turn_segment["input_ids"])
