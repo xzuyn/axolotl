@@ -37,11 +37,14 @@ class CustomGemma4PromptTokenizingStrategy(PromptTokenizingStrategy):
 
     def tokenize_prompt(self, prompt):
         try:
-            all_input_ids, all_attention_mask, all_labels = (
-                [self.tokenizer.bos_token_id],
-                [1],
-                [IGNORE_TOKEN_ID]
-            )
+            if self.tokenizer.bos_token_id is not None:
+                all_input_ids, all_attention_mask, all_labels = (
+                    [self.tokenizer.bos_token_id],
+                    [1],
+                    [IGNORE_TOKEN_ID]
+                )
+            else:
+                all_input_ids, all_attention_mask, all_labels = [], [], []
 
             # ShareGPT-to-Gemma4 Dictionary
             role_dict = {
