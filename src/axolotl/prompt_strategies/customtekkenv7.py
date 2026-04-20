@@ -47,8 +47,8 @@ class CustomTekkenV7PromptTokenizingStrategy(PromptTokenizingStrategy):
             else:
                 all_input_ids, all_attention_mask, all_labels, all_token_type_ids = [], [], [], []
 
-            # ShareGPT-to-TekkenV7 Dictionary
             role_dict = {
+                # ShareGPT
                 "system": ["[SYSTEM_PROMPT]", "[/SYSTEM_PROMPT]"],
                 "human": ["[INST]", "[/INST]"],
                 "gpt": ["", "</s>"],
