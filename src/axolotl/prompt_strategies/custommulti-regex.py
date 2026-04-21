@@ -171,11 +171,7 @@ class CustomMultiPromptTokenizingStrategy(PromptTokenizingStrategy):
 
             if self.tokenizer.bos_token_id is not None:
                 all_input_ids, all_attention_mask, all_labels, all_token_type_ids, all_mm_token_type_ids = (
-                    [self.tokenizer.bos_token_id],
-                    [1],
-                    [IGNORE_TOKEN_ID],
-                    [0],
-                    [0]
+                    [self.tokenizer.bos_token_id], [1], [IGNORE_TOKEN_ID], [0], [0]
                 )
             else:
                 all_input_ids, all_attention_mask, all_labels, all_token_type_ids, all_mm_token_type_ids = (
