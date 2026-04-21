@@ -181,10 +181,18 @@ class CustomMultiPromptTokenizingStrategy(PromptTokenizingStrategy):
             # Iterate over each conversation turn in the prompt
             turn_segments = []
             for i, turn in enumerate(prompt[conversation_name]):
+                if turn[from_name] in ["human-chat", "gpt-chat"]:
+                    turn[from_name] = turn[from_name][:-5]
+                    sharegpt_value = ftfy.fix_text(
+                        f"{turn['name'].strip()}: {turn[value_name].strip()}"
+                    )
+                else:
+                    sharegpt_value = ftfy.fix_text(turn[value_name].strip())
+
                 prefix_text, full_text = random_handle(
                     i=i,
                     role=turn[from_name],
-                    content=ftfy.fix_text(turn[value_name].strip()),
+                    content=sharegpt_value,
                 )
 
                 tokenized_text = self.tokenizer(
