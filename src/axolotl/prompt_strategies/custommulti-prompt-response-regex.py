@@ -121,6 +121,20 @@ class CustomMultiPromptTokenizingStrategy(PromptTokenizingStrategy):
         full_text = f"{prefix_text}{content}</s>"
         return prefix_text, full_text
 
+    def handle_mistral(self, i, role, content):
+        role_dict = {
+            # ShareGPT
+            "system": ["[SYSTEM_PROMPT]", "[/SYSTEM_PROMPT]"],
+            "human": ["[INST]", "[/INST]"],
+            "gpt": ["", "</s>"],
+            # OpenAI/messages
+            "user": ["[INST]", "[/INST]"],
+            "assistant": ["", "</s>"],
+        }
+        prefix_text = role_dict[role][0]
+        full_text = f"{prefix_text}{content}{role_dict[role][1]}"
+        return prefix_text, full_text
+
     def tokenize_prompt(self, prompt):
         try:
             if self.tokenizer.bos_token_id is not None:
@@ -134,7 +148,10 @@ class CustomMultiPromptTokenizingStrategy(PromptTokenizingStrategy):
                 all_input_ids, all_attention_mask, all_labels, all_token_type_ids = [], [], [], []
 
             random_handle = random.choice(
-                [self.handle_chatml, self.handle_llama3, self.handle_gemma3, self.handle_gemma4, self.handle_fizzpaca]
+                [
+                    self.handle_chatml, self.handle_llama3, self.handle_gemma3,
+                    self.handle_gemma4, self.handle_fizzpaca, handle_mistral
+                ]
             )
 
             turn_segments = []
@@ -165,7 +182,7 @@ class CustomMultiPromptTokenizingStrategy(PromptTokenizingStrategy):
 
             prefix_text, full_text = random_handle(
                 i=len(prompt["prompt"]),
-                role="model",
+                role="assistant",
                 content=ftfy.fix_text(prompt["response"].strip())
             )
 
