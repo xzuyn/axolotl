@@ -135,6 +135,20 @@ class CustomMultiPromptTokenizingStrategy(PromptTokenizingStrategy):
         full_text = f"{prefix_text}{content}{role_dict[role][1]}"
         return prefix_text, full_text
 
+    def handle_metharme(self, i, role, content):
+        role_dict = {
+            # ShareGPT
+            "system": "<|system|>",
+            "human": "<|user|>",
+            "gpt": "<|model|>",
+            # OpenAI/messages
+            "user": "<|user|>",
+            "assistant": "<|model|>",
+        }
+        prefix_text = role_dict[role][0]
+        full_text = f"{prefix_text}{content}</s>"
+        return prefix_text, full_text
+
     def tokenize_prompt(self, prompt):
         try:
             if "conversations" in prompt:
