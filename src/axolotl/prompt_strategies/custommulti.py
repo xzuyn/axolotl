@@ -284,7 +284,7 @@ class CustomMultiPromptTokenizingStrategy(PromptTokenizingStrategy):
                 all_attention_mask.extend(turn_segment["attention_mask"])
                 all_labels.extend(turn_segment["labels"])
                 all_token_type_ids.extend(turn_segment["token_type_ids"])
-                all_mm_token_type_ids.extend[turn_segment["mm_token_type_ids"]]
+                all_mm_token_type_ids.extend(turn_segment["mm_token_type_ids"])
 
             # Training on samples with all tokens masked is a waste of compute
             # May be worth checking if less than X% of tokens are trainable too
