@@ -150,7 +150,7 @@ class CustomMultiPromptTokenizingStrategy(PromptTokenizingStrategy):
             random_handle = random.choice(
                 [
                     self.handle_chatml, self.handle_llama3, self.handle_gemma3,
-                    self.handle_gemma4, self.handle_fizzpaca, handle_mistral
+                    self.handle_gemma4, self.handle_fizzpaca, self.handle_mistral
                 ]
             )
 
