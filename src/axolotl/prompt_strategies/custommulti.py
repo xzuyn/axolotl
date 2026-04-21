@@ -163,12 +163,12 @@ class CustomMultiPromptTokenizingStrategy(PromptTokenizingStrategy):
                 exit()
 
             if self.tokenizer.bos_token_id is not None:
-                all_input_ids, all_attention_mask, all_labels, all_token_type_ids, all_mm_token_type_ids = (
-                    [self.tokenizer.bos_token_id], [1], [IGNORE_TOKEN_ID], [0], [0]
+                all_input_ids, all_attention_mask, all_labels, all_token_type_ids = (
+                    [self.tokenizer.bos_token_id], [1], [IGNORE_TOKEN_ID], [0]
                 )
             else:
-                all_input_ids, all_attention_mask, all_labels, all_token_type_ids, all_mm_token_type_ids = (
-                    [], [], [], [], []
+                all_input_ids, all_attention_mask, all_labels, all_token_type_ids = (
+                    [], [], [], []
                 )
 
             random_handle = random.choice(
@@ -218,7 +218,6 @@ class CustomMultiPromptTokenizingStrategy(PromptTokenizingStrategy):
                             "attention_mask": tokenized_text["attention_mask"],
                             "labels": [IGNORE_TOKEN_ID] * len(labels),
                             "token_type_ids": [0] * len(labels),
-                            "mm_token_type_ids": [0] * len(labels),
                         }
                     )
                 # Handle partially masked model turn
@@ -243,7 +242,6 @@ class CustomMultiPromptTokenizingStrategy(PromptTokenizingStrategy):
                                 + labels[prefix_token_count:]
                             ),
                             "token_type_ids": [0] * len(labels),
-                            "mm_token_type_ids": [0] * len(labels),
                         }
                     )
                 # Handle unmasked turn
@@ -255,7 +253,6 @@ class CustomMultiPromptTokenizingStrategy(PromptTokenizingStrategy):
                             "attention_mask": tokenized_text["attention_mask"],
                             "labels": labels,
                             "token_type_ids": [0] * len(labels),
-                            "mm_token_type_ids": [0] * len(labels),
                         }
                     )
 
@@ -280,7 +277,7 @@ class CustomMultiPromptTokenizingStrategy(PromptTokenizingStrategy):
             # Return empty if there are less than 2 turns left
             if len(trimmed_turn_segments) < 2:
                 # LOG.warning(f"Processed sample will return empty due to not enough turns")  # This spams
-                return {"input_ids": [], "attention_mask": [], "labels": [], "token_type_ids": [], "mm_token_type_ids": []}
+                return {"input_ids": [], "attention_mask": [], "labels": [], "token_type_ids": []}
 
             # Combine all the turn segments
             for turn_segment in trimmed_turn_segments:
@@ -288,7 +285,6 @@ class CustomMultiPromptTokenizingStrategy(PromptTokenizingStrategy):
                 all_attention_mask.extend(turn_segment["attention_mask"])
                 all_labels.extend(turn_segment["labels"])
                 all_token_type_ids.extend(turn_segment["token_type_ids"])
-                all_mm_token_type_ids.extend(turn_segment["mm_token_type_ids"])
 
             # Training on samples with all tokens masked is a waste of compute
             # May be worth checking if less than X% of tokens are trainable too
@@ -296,18 +292,17 @@ class CustomMultiPromptTokenizingStrategy(PromptTokenizingStrategy):
                 LOG.warning(
                     f"Processed sample will return empty due to no trainable tokens after masking"
                 )
-                return {"input_ids": [], "attention_mask": [], "labels": [], "token_type_ids": [], "mm_token_type_ids": []}
+                return {"input_ids": [], "attention_mask": [], "labels": [], "token_type_ids": []}
 
             return {
                 "input_ids": all_input_ids,
                 "attention_mask": all_attention_mask,
                 "labels": all_labels,
                 "token_type_ids": all_token_type_ids,
-                "mm_token_type_ids": all_mm_token_type_ids,
             }
         except Exception as e:
             LOG.warning(e)
-            return {"input_ids": [], "attention_mask": [], "labels": [], "token_type_ids": [], "mm_token_type_ids": []}
+            return {"input_ids": [], "attention_mask": [], "labels": [], "token_type_ids": []}
 
 
 # Function to load the CustomMultiPromptTokenizingStrategy
