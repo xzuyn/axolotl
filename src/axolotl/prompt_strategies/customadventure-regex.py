@@ -83,7 +83,9 @@ class CustomAdventurePromptTokenizingStrategy(PromptTokenizingStrategy):
                 if turn[from_name] == "system":
                     sharegpt_value = f"[{sharegpt_value}]"
                 elif turn[from_name] in ["user", "human"]:
-                    prefix_text += f"> "
+                    prefix_text += "> "
+                elif turn[from_name] in ["assistant", "gpt"] and i == len(prompt[conversation_name]) - 1:
+                    sharegpt_value += "\n> "
 
                 # Tokenize and create mask out undesired tokens using regex patterns
                 tokenized_text, regex_labels = regex_attention_tokenizer(
