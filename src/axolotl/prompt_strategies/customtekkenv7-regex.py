@@ -101,7 +101,7 @@ class CustomTekkenV7PromptTokenizingStrategy(PromptTokenizingStrategy):
                 # Tokenize and create mask out undesired tokens using regex patterns
                 tokenized_text, regex_labels = regex_attention_tokenizer(
                     tokenizer=self.tokenizer,
-                    text=f"{prefix_text}{ftfy.fix_text(sharegpt_value).strip()}{role_dict[turn[from_name]][1]}",
+                    text=f"{prefix_text}{sharegpt_value}{role_dict[turn[from_name]][1]}",
                 )
 
                 # Handle masked user turn
