@@ -9,13 +9,6 @@ import logging
 # Import from axolotl package
 from axolotl.prompt_tokenizers import PromptTokenizingStrategy
 
-try:
-    from axolotl.prompt_strategies.regex_attention import regex_attention_tokenizer
-except ImportError:
-    raise ImportError(
-        "You need https://github.com/xzuyn/axolotl/blob/latest-formatters/src/axolotl/prompt_strategies/regex_attention.py"
-    )
-
 
 # Set up logging
 LOG = logging.getLogger("axolotl")
@@ -95,11 +88,16 @@ class CustomChatMLPromptTokenizingStrategy(PromptTokenizingStrategy):
                     "\n" if i != 0 else ""
                 ) + f"<|im_start|>{role_dict[turn[from_name]]}\n"
 
-                # Tokenize and create mask out undesired tokens using regex patterns
-                tokenized_text, regex_labels = regex_attention_tokenizer(
-                    tokenizer=self.tokenizer,
+                # Tokenize
+                tokenized_text = self.tokenizer(
                     text=f"{prefix_text}{sharegpt_value}<|im_end|>",
+                    add_special_tokens=False,
+                    truncation=False,
+                    padding=False,
+                    return_tensors=None,
+                    return_offsets_mapping=True,
                 )
+                labels = tokenized_text["input_ids"]
 
                 # Handle masked user turn
                 if self.train_on_inputs is False and turn[from_name] in [
@@ -113,7 +111,7 @@ class CustomChatMLPromptTokenizingStrategy(PromptTokenizingStrategy):
                             from_name: turn[from_name],
                             "input_ids": tokenized_text["input_ids"],
                             "attention_mask": tokenized_text["attention_mask"],
-                            "labels": [IGNORE_TOKEN_ID] * len(regex_labels),
+                            "labels": [IGNORE_TOKEN_ID] * len(labels),
                         }
                     )
                 # Handle partially masked model turn
@@ -136,7 +134,7 @@ class CustomChatMLPromptTokenizingStrategy(PromptTokenizingStrategy):
                             "attention_mask": tokenized_text["attention_mask"],
                             "labels": (
                                 [IGNORE_TOKEN_ID] * prefix_token_count  # Mask the prefix
-                                + regex_labels[prefix_token_count:]
+                                + labels[prefix_token_count:]
                             ),
                         }
                     )
@@ -147,7 +145,7 @@ class CustomChatMLPromptTokenizingStrategy(PromptTokenizingStrategy):
                             from_name: turn[from_name],
                             "input_ids": tokenized_text["input_ids"],
                             "attention_mask": tokenized_text["attention_mask"],
-                            "labels": regex_labels,
+                            "labels": labels,
                         }
                     )
 
