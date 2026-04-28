@@ -76,7 +76,7 @@ class CustomLLaMa3PromptTokenizingStrategy(PromptTokenizingStrategy):
                     sharegpt_value = ftfy.fix_text(turn["value"].strip())
 
                 prefix_text = (
-                    f"<|start_header_id|>{role_dict[turn[from_name]]}<|end_header_id|>\n\n"
+                    f"<|start_header_id|>{role_dict[turn['from']]}<|end_header_id|>\n\n"
                 )
 
                 tokenized_text = self.tokenizer(
@@ -96,7 +96,6 @@ class CustomLLaMa3PromptTokenizingStrategy(PromptTokenizingStrategy):
                     }
                 )
 
-            prefix_text = f"\n<start_of_turn>model\n"
             prefix_text = f"<|start_header_id|>assistant<|end_header_id|>\n\n"
 
             tokenized_text, regex_labels = regex_attention_tokenizer(
