@@ -37,7 +37,7 @@ class CustomGranitePromptTokenizingStrategy(PromptTokenizingStrategy):
 
     def tokenize_prompt(self, prompt):
         try:
-            if self.tokenizer.bos_token_id is not None:
+            if self.tokenizer.bos_token_id is not None and self.tokenizer.add_bos_token is not False:
                 all_input_ids, all_attention_mask, all_labels = (
                     [self.tokenizer.bos_token_id],
                     [1],
