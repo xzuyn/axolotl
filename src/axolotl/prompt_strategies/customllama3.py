@@ -44,7 +44,7 @@ class CustomLLaMa3PromptTokenizingStrategy(PromptTokenizingStrategy):
                     [IGNORE_TOKEN_ID]
                 )
             else:
-                all_input_ids, all_attention_mask, all_labels, all_token_type_ids = [], [], []
+                all_input_ids, all_attention_mask, all_labels = [], [], []
 
             role_dict = {
                 # ShareGPT
